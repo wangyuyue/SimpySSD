@@ -1,12 +1,27 @@
 import random
+import logging
+logging.basicConfig()
+logger = logging.getLogger(':')
+logger.setLevel(logging.INFO)
 
 params = {'channel bw': 800, # MB/s
          'read_latency': 40, # us
+         'write_latency': 100, # us
          'pg_sz': 8, # KB 
         'num_chip':16, 'num_channel':8}
 
+def assert_equal(x, y):
+    try:
+        assert(x == y)
+    except AssertionError:
+        logger.error(x, y)
+        raise
+
 class Engine:
+    engine = None
     def __init__(self):
+        assert(Engine.engine is None)
+        Engine.engine = self
         self.events = []
         self.now = 0
 
@@ -18,7 +33,7 @@ class Engine:
         event = self.events.pop(0)
         self.now = event.time
         obj = event.obj
-        obj.exec(event)
+        obj.do(event)
 
 engine = Engine()
 
@@ -29,149 +44,238 @@ class Event:
         self.time = time
         self.args = args
 
+class Sim:
+    def do(self, event):
+        raise Exception(f"{self}: unsupport event [{event.func}]")
 
-class Chip:
+class Chip(Sim):
     def __init__(self, channel, idx):
-        #print("Init a chip...")
-        self.aval_time = 0
-        self.read_latency = params['read_latency']
+        logger.info("Init a chip...")
         self.channel = channel
+        self.ssd = channel.ssd
         self.idx = idx
+
+        self.avail_time = 0
+
+        self.read_latency = params['read_latency']
+        self.write_latency = params['write_latency']
+
+        self.queued_cmd = []
+
+        # cmd <- None when the operation can step to the next stage (not stalled)
+        self.exec_cmd = None
+        self.transfer_cmd = None
+
+        # done <- True when the operation finish
+        self.exec_done = True
+        self.transfer_done = True
+
+    def exec(self, cmd):
+        self.exec_cmd = cmd
+        self.exec_done = False
+        self.queued_cmd.remove(cmd)
+
+    def transfer(self, cmd):
+        self.transfer_cmd = cmd
+        self.transfer_done = False
+        self.queued_cmd.remove(cmd)
+
+    def exec_complete_pending(self):
+        return self.exec_done and not self.exec_cmd is None
+
+    def transfer_complete_pending(self):
+        return self.transfer_done and not self.transfer_cmd is None
+
     def __repr__(self):
         return f"chip({self.channel.idx},{self.idx})"
 
-    def enqueue(self, cmd):
-        begin_time = max(engine.now, self.aval_time) 
-        self.aval_time = begin_time + self.read_latency
-        cmd.data_sz = params['pg_sz'] 
-        engine.add(Event(self, 'read', begin_time, {'cmd':cmd}))
-        #print(f'[{engine.now}]: {self} enqueue {cmd}')
+    def next_idle(self):
+        return max(engine.now, self.avail_time)
 
-    def read(self, cmd):
-        print(f"[{engine.now}]: {self} read for {cmd}")
-        engine.add(Event(self.channel, 'enqueue', engine.now + self.read_latency, {'cmd':cmd}))
+    def check_exec(self):
+        if not (self.exec_cmd is None and self.exec_done):
+            return
+        cmd = self.transfer_cmd
+        if cmd and cmd.cmd_typ == 'write' and self.transfer_done:
+            self.write_begin(cmd)
+            return
+        if len(self.queued_cmd) > 0:
+            cmd = self.queued_cmd[0]
+            if cmd.cmd_typ == 'read':
+                self.read_begin(cmd)
 
-    def exec(self, event):
+    def check_transfer(self):
+        if not (self.transfer_cmd is None and self.transfer_done):
+            return
+        cmd = self.exec_cmd
+        if cmd and cmd.cmd_typ == 'read' and self.exec_done:
+            logger.debug(f"add {cmd} to {self.channel} queue")
+            self.channel.queued_cmd.append(cmd)
+            self.channel.check_transfer()
+            return
+        if len(self.queued_cmd) > 0:
+            if self.queued_cmd[0].cmd_typ == 'write':
+                self.channel.queued_cmd.append(self.queued_cmd[0])
+                self.channel.check_transfer()
+
+    def read_begin(self, cmd):
+        assert_equal(cmd, self.queued_cmd[0])
+        self.exec(cmd)
+        self.next_avail_time = engine.now + self.read_latency
+        logger.debug(f"[{engine.now}]: {self} read_begin {cmd}")
+        engine.add(Event(self, 'read_finish', engine.now + self.read_latency, {'cmd':cmd}))
+
+    def read_finish(self, cmd):
+        logger.debug(f"[{engine.now}]: {self} read_finish {cmd}")
+        assert_equal(self.exec_cmd, cmd)
+        assert(not self.exec_done)
+        self.exec_done = True
+        self.check_transfer()
+
+        self.check_exec() # unnecessary because if check_transfer begins an transfer, transfer_begin will do chip.check_exec()
+
+    def write_begin(self, cmd):
+        logger.debug(f"[{engine.now}]: {self} chip write for {cmd}")
+        assert_equal(self.transfer_cmd, cmd)
+        assert(self.transfer_done)
+            
+        self.transfer_cmd = None
+        self.exec(cmd)
+        self.check_transfer()
+        self.next_avail_time = engine.now + self.write_latency
+        engine.add(Event(self, 'write_finish', engine.now + self.write_latency, {'cmd': cmd}))
+
+    def write_finish(self, cmd):
+        logger.debug(f"[{engine.now}]: {self} write_finish {cmd}")
+        assert_equal(self.exec_cmd, cmd)
+        assert(not self.exec_done)
+        self.exec_cmd = None
+        self.exec_done = True
+        self.check_exec()
+
+    def do(self, event):
         cmd = event.args['cmd']
-        if event.func == 'read':
-            self.read(cmd)
-        elif event.func == 'enqueue':
-            self.enqueue(cmd)
+        if event.func == 'read_finish':
+            self.read_finish(cmd)
+        elif event.func == 'write_finish':
+            self.write_finish(cmd)
+        else:
+            super().do(event)
 
-class Channel:
+class Channel(Sim):
     def __init__(self, ssd, idx):
-        #print("Init a channel...")
-        self.aval_time = 0
-        self.num_chip = params['num_chip']
-        self.chips = [Chip(self, i) for i in range(self.num_chip)]
-        self.bw = params['channel bw']
+        logger.info("Init a channel...")
         self.ssd = ssd
         self.idx = idx
+        self.aval_time = 0
+
+        self.bw = params['channel bw']
+
+        self.num_chip = params['num_chip']
+        self.chips = [Chip(self, i) for i in range(self.num_chip)]
+
+        self.transfer_cmd = None
+        self.queued_cmd = []
 
     def __repr__(self):
         return f"channel({self.idx})"
 
-    def xfer_time(self, cmd):
+    def next_idle(self):
+        return max(engine.now, self.avail_time)
+
+    def transfer_time(self, cmd):
         return cmd.data_sz / self.bw * 1000
 
-    def enqueue(self, cmd):
-        begin_time = max(engine.now, self.aval_time)
-        self.aval_time = begin_time + self.xfer_time(cmd)
-        engine.add(Event(self, 'xfer', begin_time, {'cmd':cmd}))
-        #print(f"[{engine.now}]: {self} enqueue {cmd}")
+    def check_transfer(self):
+        if self.transfer_cmd or len(self.queued_cmd) == 0:
+            return
 
-    def xfer(self, cmd):
-        engine.add(Event(self.ssd, 'get_result', engine.now + self.xfer_time(cmd), {'cmd':cmd}))
-        print(f"[{engine.now}]: {self} transfer for {cmd}")
+        # begin transfer
+        cmd = self.queued_cmd.pop(0)
+        self.transfer_begin(cmd)
+
+    def transfer_begin(self, cmd):
+        logger.debug(f"[{engine.now}]: {self} transfer_begin {cmd}")
+        chip = self.chips[cmd.chip_id]
+        assert_equal(chip.transfer_cmd, None)
+        assert_equal(self.transfer_cmd, None)
+
+        self.transfer_cmd = chip.transfer_cmd = cmd
+        chip.transfer_done = False
+
+        if cmd.cmd_typ == 'read':
+            assert(chip.exec_cmd == cmd)
+            chip.exec_cmd = None
+            engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))
+            chip.check_exec()
+        elif cmd.cmd_typ == 'write':
+            engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))        
+
+    def transfer_finish(self, cmd):
+        logger.debug(f"[{engine.now}]: {self} transfer_finish {cmd}")
+        chip = self.chips[cmd.chip_id]
+        assert_equal(cmd, self.transfer_cmd)
+        assert_equal(cmd, chip.transfer_cmd)
+
+        self.transfer_cmd = None
+        chip.transfer_done = True
+        
+        if cmd.cmd_typ == 'read':
+            chip.transfer_cmd = None
+            engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
+        elif cmd.cmd_typ == 'write':
+            chip.check_exec()
+        self.check_transfer()
     
-
-    def exec(self, event):
+    def do(self, event):
         cmd = event.args['cmd']
-        if event.func == 'xfer':
-            self.xfer(cmd)
-        elif event.func == 'enqueue':
-            self.enqueue(cmd)
+        if event.func == 'transfer_finish':
+            self.transfer_finish(cmd)
+        else:
+            super().do(event)
 
-class SSD:
+
+class SSD(Sim):
     def __init__(self, app):
+        logger.info("Init SSD...")
         self.aval_time = 0
         self.num_channel = params['num_channel']
+        self.num_chip = params['num_chip']
         self.channels = [Channel(self, i) for i in range(self.num_channel)]
         self.app = app
 
+    def queue(self, channel_id, chip_id):
+        return self.channels[channel_id].chips[chip_id].cmd_queue
+
     def get_result(self, cmd):
-        print(f'[{engine.now}]: ssd get page for {cmd}')
+        logger.info(f'[{engine.now}]: ssd get_result {cmd}')
         self.app.process(cmd)
 
     def issue(self, cmd):
-        print(f'ssd issue cmd {cmd.id}')
+        logger.info(f'[{engine.now}]: ssd issue {cmd}')
         channel = self.channels[cmd.channel_id]
         chip = channel.chips[cmd.chip_id]
-        engine.add(Event(chip, 'enqueue', engine.now, {'cmd':cmd}))
+        chip.queued_cmd.append(cmd)
+        chip.check_exec()
+        chip.check_transfer()
 
-    def exec(self, event):
+    def do(self, event):
         if event.func == 'get_result':
             self.get_result(event.args['cmd'])
         else:
-            raise Exception("hello world")
+            super().do(event)
 
 class Cmd:
     cmd_id = 0
-    def __init__(self, channel_id = None, chip_id = None):
-        if channel_id:
-            self.channel_id = channel_id
-        else:
-            self.channel_id = random.randint(0, params['num_channel'] - 1)
+    def __init__(self, channel_id = None, chip_id = None, cmd_typ = 'read'):
+        self.channel_id = channel_id or random.randint(0, params['num_channel'] - 1)
+        self.chip_id = chip_id or random.randint(0, params['num_chip'] - 1)
+        self.cmd_typ = cmd_typ
+        self.data_sz = params['pg_sz']
 
-        if chip_id:
-            self.chip_id = chip_id
-        else:
-            self.chip_id = random.randint(0, params['num_chip'] - 1)
         Cmd.cmd_id += 1
         self.id = Cmd.cmd_id
     def __repr__(self):
-        return f"cmd({self.id})"
+        return f"cmd({self.id}[{self.channel_id},{self.chip_id}])"
 
 
-class GNN:
-    def __init__(self):
-        self.gnn_time = 60
-        self.sample = [5, 5]
-        self.n_hop = 2
-        self.hop_map = {}
-        self.batch = 32
-        self.ssd = SSD(self)
-        self.wait = True
-
-    def issue(self):
-        cmd = Cmd()
-        self.hop_map[cmd] = 0
-        self.issued = [cmd]
-        self.to_issue = []
-
-        self.ssd.issue(cmd)
-
-    def process(self, cmd):
-        self.issued.remove(cmd)
-        cmd_hop = self.hop_map[cmd]
-        if cmd_hop == self.n_hop:
-            return
-        to_sample = self.sample[cmd_hop]
-        self.to_issue.extend([Cmd() for i in range(to_sample)])
-        if self.wait:
-            if len(self.issued) == 0:
-                for cmd in self.to_issue:
-                    self.hop_map[cmd] = cmd_hop + 1
-                    self.ssd.issue(cmd)
-                self.issued = self.to_issue
-                self.to_issue = []
-            else:
-                print(f"wait for other cmd in hop {cmd_hop}...")
-        else:
-            print("async not implemented")
-
-gnn = GNN()
-gnn.issue()
-
-while len(engine.events) > 0:
-    engine.exec()
