@@ -1,14 +1,10 @@
 import random
 import logging
-logging.basicConfig()
-logger = logging.getLogger(':')
-logger.setLevel(logging.INFO)
+from util import *
 
-params = {'channel bw': 800, # MB/s
-         'read_latency': 40, # us
-         'write_latency': 100, # us
-         'pg_sz': 8, # KB 
-        'num_chip':16, 'num_channel':8}
+logging.basicConfig(format="%(levelname)s: %(message)s")
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 def assert_equal(x, y):
     try:
@@ -57,8 +53,8 @@ class Chip(Sim):
 
         self.avail_time = 0
 
-        self.read_latency = params['read_latency']
-        self.write_latency = params['write_latency']
+        self.read_latency = ssd_params['read_latency']
+        self.write_latency = ssd_params['write_latency']
 
         self.queued_cmd = []
 
@@ -169,9 +165,9 @@ class Channel(Sim):
         self.idx = idx
         self.aval_time = 0
 
-        self.bw = params['channel bw']
+        self.bw = ssd_params['channel bw']
 
-        self.num_chip = params['num_chip']
+        self.num_chip = ssd_params['num_chip']
         self.chips = [Chip(self, i) for i in range(self.num_chip)]
 
         self.transfer_cmd = None
@@ -239,8 +235,8 @@ class SSD(Sim):
     def __init__(self, app):
         logger.info("Init SSD...")
         self.aval_time = 0
-        self.num_channel = params['num_channel']
-        self.num_chip = params['num_chip']
+        self.num_channel = ssd_params['num_channel']
+        self.num_chip = ssd_params['num_chip']
         self.channels = [Channel(self, i) for i in range(self.num_channel)]
         self.app = app
 
@@ -268,10 +264,10 @@ class SSD(Sim):
 class Cmd:
     cmd_id = 0
     def __init__(self, channel_id = None, chip_id = None, cmd_typ = 'read'):
-        self.channel_id = channel_id or random.randint(0, params['num_channel'] - 1)
-        self.chip_id = chip_id or random.randint(0, params['num_chip'] - 1)
+        self.channel_id = channel_id or rand_channel()
+        self.chip_id = chip_id or rand_chip()
         self.cmd_typ = cmd_typ
-        self.data_sz = params['pg_sz']
+        self.data_sz = ssd_params['pg_sz']
 
         Cmd.cmd_id += 1
         self.id = Cmd.cmd_id
