@@ -1,4 +1,4 @@
-from ssd_estimate import logger, engine, SSD, Cmd
+from ssd_estimate import logger, engine, SSD, GNNAcc, Cmd
 from util import *
 import graph
 
@@ -8,20 +8,17 @@ class GNN:
         self.subgraphs = []
 
         self.ssd = SSD(self)
+        self.accel = GNNAcc()
         self.sync_hop = True
 
-        self.nodes_to_sample = [set()] * batch_size()
+        self.reset()
 
     def reset(self):
-        self.nodes_to_sample = [set()] * batch_size()
+        self.nodes_to_sample = [set() for i in range(batch_size())]
         self.wait_completion = []
-
-    def get_nn_latency(self):
-        # default NN latency 20us
-        return 60
     
-    def get_pcie_latency(self, data_sz):
-        return data_sz / ssd_params['pcie_bw']
+    def process_pcie(self, data_sz):
+        self.accel.add_transfer(data_sz)
 
     def sample_nodes(self, batch):
         for batch_i, target_node in enumerate(batch):
@@ -41,17 +38,23 @@ class GNN:
     def process(self, cmd):
         logger.debug(f"process {cmd}, pending: {self.wait_completion}")
         self.wait_completion.remove(cmd)
-        if cmd.hop == n_total_hop():
-            return
+        
         current_hop = cmd.hop
         
         if self.sync_hop:
             print("sync hop")
             if len(self.wait_completion) == 0:
                 last_hop_sampled_nodes = self.nodes_to_sample
-                print(last_hop_sampled_nodes)
-                self.nodes_to_sample = [set()] * batch_size()
-                print(last_hop_sampled_nodes)
+                self.reset()
+                
+                if cmd.hop == n_total_hop():
+                    self.accel.begin_transfer()
+                    self.accel.begin_compute()
+                    return
+
+                num_sampled_nodes = sum([len(x) for x in last_hop_sampled_nodes])
+                self.ssd.begin_transfer_pcie(num_sampled_nodes * 4)
+                
                 for batch_i, sampled_nodes in enumerate(last_hop_sampled_nodes):
                     subgraph = self.subgraphs[batch_i]
                     nodes_to_sample = self.nodes_to_sample[batch_i]
@@ -142,7 +145,6 @@ class SubGraph:
 if __name__ == "__main__":
     zipf_graph = graph.ZipfGraph()
     gnn = GNN(zipf_graph)
-    gnn.reset()
     batch = zipf_graph.get_batch(batch_size())
     
     for batch_i, target_node in enumerate(batch):

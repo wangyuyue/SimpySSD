@@ -1,4 +1,5 @@
 import random
+import math
 
 ssd_params = {'channel bw': 800, # MB/s
          'read_latency': 40, # us
@@ -10,7 +11,7 @@ ssd_params = {'channel bw': 800, # MB/s
 
 graph_params = {'feat': 50, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 1, 'sample_per_hop': [5]}
+app_params = {'batch': 1, 'sample_per_hop': [5, 5]}
 
 def rand_chip():
     return random.randrange(ssd_params['num_chip'])
@@ -33,3 +34,7 @@ def total_sample():
 
 def batch_size():
     return app_params['batch']
+
+def page_align_sz(data_sz):
+    pg_sz = ssd_params['pg_sz']
+    return math.ceil(data_sz / pg_sz) * pg_sz
