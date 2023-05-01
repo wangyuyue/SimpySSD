@@ -2,16 +2,16 @@ import random
 import math
 
 ssd_params = {'channel bw': 800, # MB/s
-         'read_latency': 40, # us
+         'read_latency': 3, # us
          'write_latency': 100, # us
          'pg_sz': 8, # KB 
-        'num_chip':16, 'num_channel':8,
+        'num_chip':1, 'num_channel':1,
         'pcie_bw': 1e3 # MB/s
         }
 
 graph_params = {'feat': 50, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 1, 'sample_per_hop': [5, 5]}
+app_params = {'batch': 1, 'sample_per_hop': [2, 2]}
 
 def rand_chip():
     return random.randrange(ssd_params['num_chip'])

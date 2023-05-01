@@ -69,12 +69,8 @@ class Chip(Sim):
     def exec(self, cmd):
         self.exec_cmd = cmd
         self.exec_done = False
-        self.queued_cmd.remove(cmd)
-
-    def transfer(self, cmd):
-        self.transfer_cmd = cmd
-        self.transfer_done = False
-        self.queued_cmd.remove(cmd)
+        if cmd.cmd_typ == 'read':
+            self.queued_cmd.remove(cmd)
 
     def exec_complete_pending(self):
         return self.exec_done and not self.exec_cmd is None
@@ -90,6 +86,7 @@ class Chip(Sim):
 
     def check_exec(self):
         if not (self.exec_cmd is None and self.exec_done):
+            print(f"{self} has unfinished cmd execution")
             return
         cmd = self.transfer_cmd
         if cmd and cmd.cmd_typ == 'write' and self.transfer_done:
@@ -99,20 +96,25 @@ class Chip(Sim):
             cmd = self.queued_cmd[0]
             if cmd.cmd_typ == 'read':
                 self.read_begin(cmd)
+        print(self.queued_cmd)
 
     def check_transfer(self):
-        if not (self.transfer_cmd is None and self.transfer_done):
-            return
-        cmd = self.exec_cmd
-        if cmd and cmd.cmd_typ == 'read' and self.exec_done:
-            logger.debug(f"add {cmd} to {self.channel} queue")
-            self.channel.queued_cmd.append(cmd)
+        def prepare_transfer(cmd):
+            if not cmd in self.channel.queued_cmd:
+                logger.debug(f"add {cmd} to {self.channel} queue")
+                self.channel.queued_cmd.append(cmd)
             self.channel.check_transfer()
-            return
+        
+        if not self.exec_cmd is None:
+            cmd = self.exec_cmd
+            if cmd.cmd_typ == 'read' and self.exec_done:
+                prepare_transfer(cmd)
+                return
         if len(self.queued_cmd) > 0:
-            if self.queued_cmd[0].cmd_typ == 'write':
-                self.channel.queued_cmd.append(self.queued_cmd[0])
-                self.channel.check_transfer()
+            cmd = self.queued_cmd[0]
+            if cmd.cmd_typ == 'write' and self.transfer_cmd is None:
+                self.queued_cmd.pop(0)
+                prepare_transfer(cmd)
 
     def read_begin(self, cmd):
         assert_equal(cmd, self.queued_cmd[0])
@@ -131,7 +133,7 @@ class Chip(Sim):
         self.check_exec() # unnecessary because if check_transfer begins an transfer, transfer_begin will do chip.check_exec()
 
     def write_begin(self, cmd):
-        logger.debug(f"[{engine.now}]: {self} chip write for {cmd}")
+        logger.debug(f"[{engine.now}]: {self} write for {cmd}")
         assert_equal(self.transfer_cmd, cmd)
         assert(self.transfer_done)
             
@@ -183,29 +185,33 @@ class Channel(Sim):
         return cmd.data_sz / self.bw * 1000
 
     def check_transfer(self):
+        print(f"before check, {self} queue: {self.queued_cmd}")
         if self.transfer_cmd or len(self.queued_cmd) == 0:
             return
 
         # begin transfer
         cmd = self.queued_cmd.pop(0)
         self.transfer_begin(cmd)
+        print(f"after check, {self} queue: {self.queued_cmd}")
 
     def transfer_begin(self, cmd):
         logger.debug(f"[{engine.now}]: {self} transfer_begin {cmd}")
         chip = self.chips[cmd.chip_id]
-        assert_equal(chip.transfer_cmd, None)
+        # assert_equal(chip.transfer_cmd, None)
         assert_equal(self.transfer_cmd, None)
 
-        self.transfer_cmd = chip.transfer_cmd = cmd
-        chip.transfer_done = False
-
+        self.transfer_cmd = cmd
         if cmd.cmd_typ == 'read':
             assert(chip.exec_cmd == cmd)
             chip.exec_cmd = None
             engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))
-            chip.check_exec()
+            chip.check_exec() # necessary for read write interleaved situation
         elif cmd.cmd_typ == 'write':
             engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))        
+
+        # self.transfer_cmd = cmd
+        chip.transfer_cmd = cmd
+        chip.transfer_done = False
 
     def transfer_finish(self, cmd):
         logger.debug(f"[{engine.now}]: {self} transfer_finish {cmd}")
@@ -219,9 +225,11 @@ class Channel(Sim):
         if cmd.cmd_typ == 'read':
             chip.transfer_cmd = None
             engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
-        elif cmd.cmd_typ == 'write':
-            chip.check_exec()
+        # elif cmd.cmd_typ == 'write':
+        #     chip.check_exec()
+        chip.check_exec()
         self.check_transfer()
+        chip.check_transfer()
     
     def do(self, event):
         cmd = event.args['cmd']
@@ -295,7 +303,8 @@ class Cmd:
         Cmd.cmd_id += 1
         self.id = Cmd.cmd_id
     def __repr__(self):
-        return f"cmd({self.id}[{self.channel_id},{self.chip_id}])"
+        typ = 'r' if self.cmd_typ == 'read' else 'w'
+        return f"cmd{typ}({self.id}[{self.channel_id},{self.chip_id}])"
 
 
 class GNNAcc(Sim):
