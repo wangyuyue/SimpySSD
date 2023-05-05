@@ -5,7 +5,7 @@ ssd_params = {'channel bw': 800, # MB/s
          'read_latency': 3, # us
          'write_latency': 100, # us
          'pg_sz': 8, # KB 
-        'num_chip':1, 'num_channel':1,
+        'num_chip':8, 'num_channel':8,
         'pcie_bw': 1e3 # MB/s
         }
 
