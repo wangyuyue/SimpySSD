@@ -36,5 +36,5 @@ def batch_size():
     return app_params['batch']
 
 def page_align_sz(data_sz):
-    pg_sz = ssd_params['pg_sz']
+    pg_sz = ssd_params['pg_sz'] * 1e3
     return math.ceil(data_sz / pg_sz) * pg_sz

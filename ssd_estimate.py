@@ -1,10 +1,12 @@
 import random
 import logging
+from sim import *
 from util import *
 
+
 logging.basicConfig(format="%(levelname)s: %(message)s")
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger('ssd_logger')
+logger.setLevel(logging.INFO)
 
 def assert_equal(x, y):
     try:
@@ -12,37 +14,6 @@ def assert_equal(x, y):
     except AssertionError:
         logger.error(x, y)
         raise
-
-class Engine:
-    engine = None
-    def __init__(self):
-        assert(Engine.engine is None)
-        Engine.engine = self
-        self.events = []
-        self.now = 0
-
-    def add(self, event):
-        self.events.append(event)
-        self.events.sort(key=lambda x: x.time)
-
-    def exec(self):
-        event = self.events.pop(0)
-        self.now = event.time
-        obj = event.obj
-        obj.do(event)
-
-engine = Engine()
-
-class Event:
-    def __init__(self, obj, func, time, args):
-        self.obj = obj
-        self.func = func
-        self.time = time
-        self.args = args
-
-class Sim:
-    def do(self, event):
-        raise Exception(f"{self}: unsupport event [{event.func}]")
 
 class SRAM_Buffer:
     idle = 0
@@ -300,26 +271,24 @@ class Channel(Sim):
 
 
 class SSD(Sim):
-    def __init__(self, app):
+    def __init__(self, system):
         logger.info("Init SSD...")
         self.aval_time = 0
         self.num_channel = ssd_params['num_channel']
         self.num_chip = ssd_params['num_chip']
         self.channels = [Channel(self, i) for i in range(self.num_channel)]
-        self.app = app
-
-        self.pcie_transfer_list = []
-        self.pcie_busy = False
+        
+        self.system = system
 
         self.issued_cmd = set()
         self.finished_cmd = set()
 
     def queue(self, channel_id, chip_id):
-        return self.channels[channel_id].chips[chip_id].cmd_queue
+        return self.channels[channel_id].chips[chip_id].queued_cmd
 
     def get_result(self, cmd):
         logger.info(f'[{engine.now}]: ssd get_result {cmd}')
-        self.app.process(cmd)
+        self.system.process(cmd)
 
     def issue(self, cmd):
         logger.info(f'[{engine.now}]: ssd issue {cmd}')
@@ -331,29 +300,9 @@ class SSD(Sim):
         chip.check_exec()
         chip.check_transfer()
 
-    def begin_transfer_pcie(self, data_sz):
-        if self.pcie_busy:
-            self.pcie_transfer_list.append(data_sz)
-        else:
-            self.pcie_busy = True
-            aligned_sz = page_align_sz(data_sz)
-            end_time = engine.now + aligned_sz / ssd_params['pcie_bw']
-            engine.add(Event(self, 'end_transfer_pcie', end_time, {'data_sz': data_sz}))
-
-    def end_transfer_pcie(self, data_sz):
-        self.pcie_busy = False
-        self.app.process_pcie(data_sz)
-
-        if len(self.pcie_transfer_list) > 0:
-            data_sz = self.pcie_transfer_list.pop(0)
-            self.begin_transfer_pcie(data_sz)
-        
-
     def do(self, event):
         if event.func == 'get_result':
             self.get_result(event.args['cmd'])
-        elif event.func == 'end_transfer_pcie':
-            self.end_transfer_pcie(event.args['data_sz'])
         else:
             super().do(event)
 
@@ -372,47 +321,3 @@ class Cmd:
         return f"cmd{typ}({self.id}[{self.channel_id},{self.chip_id}])"
 
 
-class GNNAcc(Sim):
-    def __init__(self):
-        self.location = 'seperate'
-        self.compute_latency = 50
-        self.transfer_list = []
-        self.transferring = False
-        self.compute_waiting = False
-
-    def add_transfer(self, data_sz):
-        self.transfer_list.append(data_sz)
-    
-    def transfer_latency(self, data_sz):
-        return data_sz / ssd_params['pcie_bw']
-    
-    def begin_transfer(self):
-        if not self.transferring and len(self.transfer_list) > 0:
-            self.transferring = True
-            transfer_sz = self.transfer_list.pop(0)
-            end_time = engine.now + self.transfer_latency(transfer_sz)
-            engine.add(Event(self, 'end_transfer', end_time, {}))
-
-    def end_transfer(self):
-        self.transferring = False
-        self.begin_transfer()
-        if self.compute_waiting:
-            self.begin_compute()
-
-    def begin_compute(self):
-        if self.transferring or len(self.transfer_list) > 0:
-            self.compute_waiting = True
-            return
-        engine.add(Event(self, 'end_compute', engine.now + self.compute_latency, {}))
-
-    def end_compute(self):
-        self.compute_waiting = False
-        return
-
-    def do(self, event):
-        if event.func == 'end_transfer':
-            self.end_transfer()
-        elif event.func == 'end_compute':
-            self.end_compute()
-        else:
-            super().do(event)
