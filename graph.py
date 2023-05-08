@@ -6,7 +6,9 @@ from util import *
 
 class Graph:
     def __init__(self):
-        self.feat = graph_params['feat']
+        self.reset()
+    def reset(self):
+        self.feat_sz = graph_params['feat_sz']
         self.n_node = graph_params['n_node']
         self.feat_together = graph_params['feat_together']
 
@@ -34,7 +36,7 @@ class RandomGraph(Graph):
         # node id 4(byte) is enough for million-nodes-scale graph
         sz = node.n_edge * 4
         if self.feat_together:
-            sz += self.feat
+            sz += self.feat_sz
         n_page = math.ceil(sz / (1e3 * ssd_params['pg_sz']))
         self.node2pages[node.node_id] = [self.get_random_page() for i in range(n_page)]
 
@@ -43,11 +45,16 @@ class RandomGraph(Graph):
             self.set_pages(node)
         return self.node2pages[node.node_id]
 
+    def get_feat_page(self, node):
+        if self.feat_together:
+            return get_pages(node)[0]
+        return self.get_random_page()
+
     def sample_per_page(self, node, n):
         node_id_list = random.sample(range(node.n_edge), n)
         offset = 0
         if self.feat_together:
-            offset += self.feat
+            offset += self.feat_sz
         sample_per_page = {}
         for node_id in node_id_list:
             page_id = math.floor((offset + (node_id + 1) * 4) / (1e3 * ssd_params['pg_sz']))

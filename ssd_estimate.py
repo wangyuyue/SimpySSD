@@ -6,8 +6,8 @@ from util import *
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('ssd_logger')
-logger.setLevel(logging.INFO)
-
+# logger.setLevel(logging.INFO)
+logger.setLevel(0)
 def assert_equal(x, y):
     try:
         assert(x == y)
@@ -65,6 +65,11 @@ class Chip(Sim):
             buf.status = SRAM_Buffer.executing
         elif cmd.cmd_typ == 'write':
             buf.status = SRAM_Buffer.executing
+        elif cmd.cmd_typ == 'sample':
+            self.queued_cmd.remove(cmd)
+            buf.empty = False
+            buf.cmd = cmd
+            buf.status = SRAM_Buffer.executing
 
     def __repr__(self):
         return f"chip({self.channel.idx},{self.idx})"
@@ -91,6 +96,9 @@ class Chip(Sim):
                 if cmd.cmd_typ == 'read':
                     self.read_begin(cmd, buf)
                     return
+                elif cmd.cmd_typ == 'sample':
+                    self.read_begin(cmd, buf)
+                    return
 
     def check_transfer(self):
         def prepare_transfer(cmd):
@@ -103,6 +111,8 @@ class Chip(Sim):
             if not buf.empty:
                 cmd = buf.cmd
                 if cmd.cmd_typ == 'read' and buf.status == SRAM_Buffer.ready_to_transfer:
+                    prepare_transfer(cmd)
+                elif cmd.cmd_typ == 'sample' and buf.status == SRAM_Buffer.ready_to_transfer:
                     prepare_transfer(cmd)
 
         if len(self.queued_cmd) > 0:
@@ -125,10 +135,28 @@ class Chip(Sim):
         assert(not self.exec_done)
         self.exec_cmd = None
         self.exec_done = True
-        buf.status = SRAM_Buffer.ready_to_transfer
-        self.check_transfer()
-
+        if cmd.cmd_typ == 'read':
+            buf.status = SRAM_Buffer.ready_to_transfer
+            self.check_transfer()
+        elif cmd.cmd_typ == 'sample':
+            self.sample_begin(buf)
         self.check_exec() # unnecessary because if check_transfer begins an transfer, transfer_begin will do chip.check_exec()
+
+    def sample_begin(self, buf):
+        buf.status = SRAM_Buffer.idle
+        engine.add(Event(self, 'sample_finish', engine.now + 1, {'buf':buf}))
+
+    def sample_finish(self, buf):
+        buf.status = SRAM_Buffer.ready_to_transfer
+        cmd = buf.cmd
+        
+        cmd.data_sz = 0
+        if cmd.has_ext:
+            if graph_params['feat_together']:
+                cmd.data_sz = graph_params['feat_sz']
+            ext_cmds = self.ssd.system.app.cmd2extcmds[cmd]
+            self.ssd.forward(ext_cmds)
+        self.check_transfer()
 
     def write_begin(self, cmd, buf):
         logger.debug(f"[{engine.now}]: {self} write for {cmd}")
@@ -163,6 +191,8 @@ class Chip(Sim):
             self.read_finish(buf)
         elif event.func == 'write_finish':
             self.write_finish(buf)
+        elif event.func == 'sample_finish':
+            self.sample_finish(buf)
         else:
             super().do(event)
 
@@ -173,13 +203,17 @@ class Channel(Sim):
         self.idx = idx
         self.aval_time = 0
 
-        self.bw = ssd_params['channel bw']
+        self.bw = ssd_params['channel_bw']
 
         self.num_chip = ssd_params['num_chip']
         self.chips = [Chip(self, i) for i in range(self.num_chip)]
 
         self.transfer_cmd = None
         self.queued_cmd = []
+
+        # self.next_issue_time = 0
+        # self.issue_queue = []
+        # self.forward_queue = []
 
     def __repr__(self):
         return f"channel({self.idx})"
@@ -188,7 +222,7 @@ class Channel(Sim):
         return max(engine.now, self.avail_time)
 
     def transfer_time(self, cmd):
-        return cmd.data_sz / self.bw * 1000
+        return cmd.data_sz / self.bw
 
     def check_transfer(self):
         if self.transfer_cmd or len(self.queued_cmd) == 0:
@@ -203,6 +237,8 @@ class Channel(Sim):
                     empty_buf = [buf for buf in chip.buffer if buf.empty]
                     if len(empty_buf) > 0:
                         return cmd
+                elif cmd.cmd_typ == 'sample':
+                    return cmd
             return None
 
         # begin transfer
@@ -232,7 +268,13 @@ class Channel(Sim):
             buf.cmd = cmd
             buf.empty = False
             buf.status = SRAM_Buffer.transferring
-            engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))        
+            engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))
+        elif cmd.cmd_typ == 'sample':
+            buf = chip.cmd_in_buf(cmd)
+            assert(buf != None)
+            buf.status = SRAM_Buffer.transferring
+            engine.add(Event(self, 'transfer_finish', engine.now + self.transfer_time(cmd), {'cmd': cmd}))
+            chip.check_exec() # necessary for read write interleaved situation
 
         chip.transfer_cmd = cmd
         chip.transfer_done = False
@@ -258,14 +300,28 @@ class Channel(Sim):
             engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
         elif cmd.cmd_typ == 'write':
             buf.status = SRAM_Buffer.ready_to_execute
+        elif cmd.cmd_typ == 'sample':
+            buf.status = SRAM_Buffer.idle
+            buf.empty = True
+            buf.cmd = None
+            assert(not cmd in self.ssd.finished_cmd)
+            self.ssd.finished_cmd.add(cmd)
+            engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
+        
         chip.check_exec()
         self.check_transfer()
         chip.check_transfer()
     
+    # def push_to_forward_queue(self, cmd):
+    #     self.forward_queue.append(cmd)
+    #     self.ssd.forward_cmd()
+
     def do(self, event):
         cmd = event.args['cmd']
         if event.func == 'transfer_finish':
             self.transfer_finish(cmd)
+        # elif event.func == 'push_to_forward_queue':
+        #     self.push_to_forward_queue(cmd)
         else:
             super().do(event)
 
@@ -300,6 +356,10 @@ class SSD(Sim):
         chip.check_exec()
         chip.check_transfer()
 
+    def forward(self, ext_cmds):
+        for ext_cmd in ext_cmds:
+            self.system.app.issue(ext_cmd)
+
     def do(self, event):
         if event.func == 'get_result':
             self.get_result(event.args['cmd'])
@@ -308,16 +368,22 @@ class SSD(Sim):
 
 class Cmd:
     cmd_id = 0
-    def __init__(self, channel_id = None, chip_id = None, cmd_typ = 'read'):
-        self.channel_id = channel_id or rand_channel()
-        self.chip_id = chip_id or rand_chip()
+    def __init__(self, cmd_typ, channel_id, chip_id, page_id = None, data_sz = None, has_ext = False):
         self.cmd_typ = cmd_typ
-        self.data_sz = ssd_params['pg_sz']
+
+        self.page_id = page_id
+        self.channel_id = channel_id
+        self.chip_id = chip_id
+        
+        self.data_sz = data_sz or ssd_params['pg_sz'] * 1e3
+        self.has_ext = has_ext
 
         Cmd.cmd_id += 1
         self.id = Cmd.cmd_id
     def __repr__(self):
-        typ = 'r' if self.cmd_typ == 'read' else 'w'
+        cmd_typs = {'read':'r', 'write':'w', 'sample':'s'}
+        typ = cmd_typs[self.cmd_typ]
+        
         return f"cmd{typ}({self.id}[{self.channel_id},{self.chip_id}])"
 
 

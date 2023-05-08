@@ -52,7 +52,9 @@ class SubGraph:
 
     def pages_to_fetch(self, node_id):
         node_info = self.node_infos[node_id]
-        return node_info.pages
+        pages = list(node_info.page2edges.keys())
+        pages.sort(key=lambda x: x==node_info.pages[0], reverse=True)
+        return pages
 
     def show(self):
         print("subgraph:")

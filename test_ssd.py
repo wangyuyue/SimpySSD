@@ -12,7 +12,7 @@ class None_App():
 def get_rand_cmd(cmd_typ=None):
     if not cmd_typ:
         cmd_typ = 'read' if random.randint(0, 1) % 2 == 0 else 'write'
-    return Cmd(rand_channel(), rand_chip(), cmd_typ = cmd_typ)
+    return Cmd(cmd_typ=cmd_typ, channel_id=rand_channel(), chip_id=rand_chip())
 
 def check_chip_queue(ssd):
     for channel in ssd.channels:
