@@ -2,6 +2,7 @@ import logging
 from sim import *
 from util import system_params
 
+
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('acc logger')
 logger.setLevel(logging.INFO)
@@ -24,10 +25,13 @@ class GNNAcc(Sim):
         logger.info(f"[{engine.now}]: {self} begin compute")
         engine.add(Event(self, 'end_compute', engine.now + self.compute_latency, {}))
 
+        self.system.stat.start_dnn(engine.now)
+        
     def end_compute(self):
         self.status = GNNAcc.idle
         logger.info(f"[{engine.now}]: {self} end compute")
-        return
+
+        self.system.stat.end_dnn(engine.now)
 
     def do(self, event):
         if event.func == 'end_compute':

@@ -45,11 +45,14 @@ class PCIeBus(Sim):
             end_time = engine.now + aligned_sz / self.bandwidth
             logger.info(f"[{engine.now}]: {self} begin transfer {data_sz}B {src}->{dst}")
             engine.add(Event(self, 'end_pcie_transfer', end_time, {'data_sz': data_sz, 'src': src}))
+            self.system.stat.start_pcie(engine.now, src, dst)
 
     def end_pcie_transfer(self, data_sz, src):
         queue, dst = self.get_queue_dst(src)
         queue.busy = False
         logger.info(f"[{engine.now}]: {self} end transfer {data_sz}B {src}->{dst}")
+        
+        self.system.stat.end_pcie(engine.now, src, dst)
         if 'ssd' in self.nodes:
             end_time = engine.now + system_params['host_side_delay']
             engine.add(Event(self.system, 'notify_app', end_time, {}))

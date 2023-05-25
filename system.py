@@ -12,10 +12,15 @@ class System(Sim):
         self.gnn_accelerator = GNNAcc(self)
         if system_params['accel_loc'] == 'pcie':
             self.dnn_pcie = PCIeBus(self, 'accel')
+        self.app = None
+        self.stat = None
 
     def set_app(self, app):
         self.app = app
         self.dram_buf = Buffer(graph_params['feat_sz'], 100)
+
+    def set_stat(self, stat):
+        self.stat = stat
 
     def process(self, cmd):
         self.app.process(cmd)

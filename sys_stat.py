@@ -1,0 +1,86 @@
+class Stat:
+    def __init__(self, num_hop):
+        self.num_hop = num_hop
+        self.hop_start_time = [0] * num_hop
+        self.hop_end_time = [0] * num_hop
+        
+        self.channel_busy_n = []
+        self.channel_busy_time = []
+        
+        self.chip_busy_n = []
+        self.chip_busy_time = []
+        
+        self.dnn_start_time = []
+        self.dnn_end_time = []
+        
+        self.pcie_start_time = {}
+        self.pcie_end_time = {}
+        self.firmware_waiting_time = []
+        
+        self.total_time = 0
+
+    def channel_busy(self, now_time, delta):
+        if len(self.channel_busy_n) == 0:
+            self.channel_busy_time.append(now_time)
+            self.channel_busy_n.append(delta)
+            # print(self.channel_busy_n)
+            return
+
+        now_busy_n = self.channel_busy_n[-1] + delta
+        if self.channel_busy_time[-1] == now_time:
+            self.channel_busy_n[-1] = now_busy_n
+        else:
+            assert(self.channel_busy_time[-1] < now_time)
+            self.channel_busy_time.append(now_time)
+            self.channel_busy_n.append(now_busy_n)
+        # print(self.channel_busy_n)
+    
+    def chip_busy(self, now_time, delta):
+        if len(self.chip_busy_n) == 0:
+            self.chip_busy_time.append(now_time)
+            self.chip_busy_n.append(delta)
+            # print(self.chip_busy_n)
+            return
+
+        now_busy_n = self.chip_busy_n[-1] + delta
+        if self.chip_busy_time[-1] == now_time:
+            self.chip_busy_n[-1] = now_busy_n
+        else:
+            assert(self.chip_busy_time[-1] < now_time)
+            self.chip_busy_time.append(now_time)
+            self.chip_busy_n.append(now_busy_n)
+        # print(self.chip_busy_n)
+
+    def start_hop(self, now_time, n_hop):
+        if self.hop_start_time[n_hop] == 0:
+            self.hop_start_time[n_hop] = now_time
+        else:
+            assert(self.hop_start_time[n_hop] <= now_time)
+        # print("start time", self.hop_start_time)
+
+    def end_hop(self, now_time, n_hop):
+        assert(self.hop_end_time[n_hop] <= now_time)
+        self.hop_end_time[n_hop] = now_time
+        # print("end time", self.hop_end_time)
+
+    def start_dnn(self, now_time):
+        self.dnn_start_time.append(now_time)
+
+    def end_dnn(self, now_time):
+        self.dnn_end_time.append(now_time)
+
+    def start_pcie(self, now_time, from_node, to_node):
+        pair = (from_node, to_node)
+        if not pair in self.pcie_start_time:
+            self.pcie_start_time[pair] = [now_time]
+        else:
+            self.pcie_start_time[pair].append(now_time)
+        print(pair, self.pcie_start_time[pair])
+    
+    def end_pcie(self, now_time, from_node, to_node):
+        pair = (from_node, to_node)
+        if not pair in self.pcie_end_time:
+            self.pcie_end_time[pair] = [now_time]
+        else:
+            self.pcie_end_time[pair].append(now_time)
+        print(pair, self.pcie_end_time[pair])

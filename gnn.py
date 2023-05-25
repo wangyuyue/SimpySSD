@@ -6,6 +6,7 @@ import graph
 from subgraph import SubGraph
 import random
 import numpy as np
+from sys_stat import *
 
 class GNN:
     def __init__(self, graph):
@@ -45,13 +46,17 @@ class GNN:
             self.cmd2dst_node[cmd] = {node.node_id for node in node_info.page2edges.get(page, {})}
             self.cmd2hop[cmd] = hop_i
             cmds.append(cmd)
+        
+        first_cmd = cmds[0]
+        if graph_params['feat_together']:
+            first_cmd.has_feat = True
+
         if system_params['dram_node2pages_map']:
             for cmd in cmds:
                 self.issue(cmd)
         else:
             assert(system_params['flash_sample'] == True)
             assert(system_params['channel_forward'] == True)
-            first_cmd = cmds[0]
             first_cmd.has_ext = True
             self.cmd2extcmds[first_cmd] = cmds[1:]
             self.issue(first_cmd)
@@ -71,6 +76,8 @@ class GNN:
         
         self.current_hop = self.cmd2hop[cmd]
         
+        self.system.stat.end_hop(engine.now, self.cmd2hop[cmd])
+
         if system_params['sync_hop']:
             # print("sync hop")
             if len(self.wait_completion) == 0:
@@ -124,7 +131,7 @@ def reset(gnn):
     gnn.reset_hop()
 
 if __name__ == "__main__":
-    repeat = 5
+    repeat = 1
     repeat_test = []
     for i in range(repeat):
         random.seed(i)
@@ -145,11 +152,14 @@ if __name__ == "__main__":
         
         latency = []
         for config in configs:
+            print(f"config: {config['name']}")
             reset(gnn)
             system_params.update(config)
 
             system = System()
             system.set_app(gnn)
+
+            system.set_stat(Stat(n_total_hop()))
             gnn.run_on(system)
 
             gnn.subgraphs = subgraphs
@@ -157,16 +167,20 @@ if __name__ == "__main__":
         
             while len(engine.events) > 0:
                 engine.exec()
+            
+            print(system.stat.pcie_start_time)
+            print(system.stat.pcie_end_time)
+            system.stat.total_time = engine.now
             latency.append(engine.now)
 
         repeat_test.append(latency)
 
-    latency = [sum(list(t))/len(list(t)) for t in list(zip(*repeat_test))]
+    # latency = [sum(list(t))/len(list(t)) for t in list(zip(*repeat_test))]
 
-    import seaborn as sns
-    dic = {}
-    dic['name'] = [config['name'] for config in configs]
-    dic['latency'] = [latency[0]/lat for lat in latency]
-    plot = sns.barplot(x='name', y='latency', data=dic)
-    plot.set(xlabel='config', ylabel='speedup')
-    plot.get_figure().savefig(f'speedup_feat{graph_params["feat_sz"]}_batch_{app_params["batch"]}_hop_{"_".join([str(i) for i in app_params["sample_per_hop"]])}.png')
+    # import seaborn as sns
+    # dic = {}
+    # dic['name'] = [config['name'] for config in configs]
+    # dic['latency'] = [latency[0]/lat for lat in latency]
+    # plot = sns.barplot(x='name', y='latency', data=dic)
+    # plot.set(xlabel='config', ylabel='speedup')
+    # plot.get_figure().savefig(f'speedup_feat{graph_params["feat_sz"]}_batch_{app_params["batch"]}_hop_{"_".join([str(i) for i in app_params["sample_per_hop"]])}.png')

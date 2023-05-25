@@ -6,7 +6,7 @@ from util import *
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('ssd_logger')
-# logger.setLevel(logging.INFO)
+# logger.setLevel(logging.DEBUG)
 logger.setLevel(0)
 def assert_equal(x, y):
     try:
@@ -28,7 +28,7 @@ class SRAM_Buffer:
 
 class Chip(Sim):
     def __init__(self, channel, idx):
-        logger.info("Init a chip...")
+        # logger.info("Init a chip...")
         self.channel = channel
         self.ssd = channel.ssd
         self.idx = idx
@@ -55,6 +55,15 @@ class Chip(Sim):
                 return buf
         return None
 
+    def record_flash_stat(self):
+        stat = self.channel.ssd.system.stat
+        delta = 1 if self.exec_cmd else -1
+        stat.chip_busy(engine.now, delta)
+        if self.exec_cmd is None:
+            return
+        hop_i = self.channel.ssd.system.app.cmd2hop[self.exec_cmd]
+        stat.start_hop(engine.now, hop_i)
+
     def exec(self, cmd, buf):
         self.exec_cmd = cmd
         self.exec_done = False
@@ -70,6 +79,9 @@ class Chip(Sim):
             buf.empty = False
             buf.cmd = cmd
             buf.status = SRAM_Buffer.executing
+        else:
+            raise Exception("Unknown command type")
+        self.record_flash_stat()
 
     def __repr__(self):
         return f"chip({self.channel.idx},{self.idx})"
@@ -124,7 +136,6 @@ class Chip(Sim):
     def read_begin(self, cmd, buf):
         assert_equal(cmd, self.queued_cmd[0])
         self.exec(cmd, buf)
-        self.next_avail_time = engine.now + self.read_latency
         logger.debug(f"[{engine.now}]: {self} read_begin {cmd}")
         engine.add(Event(self, 'read_finish', engine.now + self.read_latency, {'buf':buf}))
 
@@ -135,6 +146,9 @@ class Chip(Sim):
         assert(not self.exec_done)
         self.exec_cmd = None
         self.exec_done = True
+
+        self.record_flash_stat()
+
         if cmd.cmd_typ == 'read':
             buf.status = SRAM_Buffer.ready_to_transfer
             self.check_transfer()
@@ -151,9 +165,9 @@ class Chip(Sim):
         cmd = buf.cmd
         
         cmd.data_sz = 0
+        if cmd.has_feat:
+            cmd.data_sz = graph_params['feat_sz']
         if cmd.has_ext:
-            if graph_params['feat_together']:
-                cmd.data_sz = graph_params['feat_sz']
             ext_cmds = self.ssd.system.app.cmd2extcmds[cmd]
             self.ssd.forward(ext_cmds)
         self.check_transfer()
@@ -163,7 +177,6 @@ class Chip(Sim):
 
         self.exec(cmd, buf)
         self.check_transfer()
-        self.next_avail_time = engine.now + self.write_latency
         engine.add(Event(self, 'write_finish', engine.now + self.write_latency, {'buf': buf}))
 
     def write_finish(self, buf):
@@ -174,6 +187,8 @@ class Chip(Sim):
         assert(not self.exec_done)
         self.exec_cmd = None
         self.exec_done = True
+
+        self.record_flash_stat()
         
         buf.status = SRAM_Buffer.idle
         buf.empty = True
@@ -198,10 +213,10 @@ class Chip(Sim):
 
 class Channel(Sim):
     def __init__(self, ssd, idx):
-        logger.info("Init a channel...")
+        # logger.info("Init a channel...")
         self.ssd = ssd
         self.idx = idx
-        self.aval_time = 0
+        self.avail_time = 0
 
         self.bw = ssd_params['channel_bw']
 
@@ -217,6 +232,11 @@ class Channel(Sim):
 
     def __repr__(self):
         return f"channel({self.idx})"
+
+    def record_channel_stat(self, is_busy):
+        stat = self.ssd.system.stat
+        delta = 1 if is_busy else -1
+        stat.channel_busy(engine.now, delta)
 
     def next_idle(self):
         return max(engine.now, self.avail_time)
@@ -278,6 +298,8 @@ class Channel(Sim):
 
         chip.transfer_cmd = cmd
         chip.transfer_done = False
+        
+        self.record_channel_stat(is_busy=True)
 
     def transfer_finish(self, cmd):
         logger.debug(f"[{engine.now}]: {self} transfer_finish {cmd}")
@@ -308,6 +330,8 @@ class Channel(Sim):
             self.ssd.finished_cmd.add(cmd)
             engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
         
+        self.record_channel_stat(is_busy=False)
+
         chip.check_exec()
         self.check_transfer()
         chip.check_transfer()
@@ -328,7 +352,7 @@ class Channel(Sim):
 
 class SSD(Sim):
     def __init__(self, system):
-        logger.info("Init SSD...")
+        # logger.info("Init SSD...")
         self.aval_time = 0
         self.num_channel = ssd_params['num_channel']
         self.num_chip = ssd_params['num_chip']
@@ -368,7 +392,7 @@ class SSD(Sim):
 
 class Cmd:
     cmd_id = 0
-    def __init__(self, cmd_typ, channel_id, chip_id, page_id = None, data_sz = None, has_ext = False):
+    def __init__(self, cmd_typ, channel_id, chip_id, page_id = None, data_sz = None):
         self.cmd_typ = cmd_typ
 
         self.page_id = page_id
@@ -376,7 +400,8 @@ class Cmd:
         self.chip_id = chip_id
         
         self.data_sz = data_sz or ssd_params['pg_sz'] * 1e3
-        self.has_ext = has_ext
+        self.has_ext = False
+        self.has_feat = False
 
         Cmd.cmd_id += 1
         self.id = Cmd.cmd_id
