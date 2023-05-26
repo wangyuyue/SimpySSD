@@ -6,9 +6,10 @@ ssd_params = {'channel_bw': 800, # MB/s
          'write_latency': 30, # us
          'pg_sz': 4, # KB 
          'num_chip':8,
-         'num_channel':4,
+         'num_channel':16,
          'dram_bw': 16e3, #MB/s
-         'dram_latency': 0.1 #us
+         'dram_latency': 0.10, #us
+         'dram_capacity': 4e3 # MB
         }
 
 system_params = {
@@ -23,7 +24,7 @@ smartSage_config = {
     'channel_forward': False,
     'sync_hop': True,
     'sync_host': True,
-    'dram_node2pages_map': True
+    'dram_translate': True
 }
 
 smartSage_async_config = {
@@ -32,7 +33,7 @@ smartSage_async_config = {
     'channel_forward': False,
     'sync_hop': False,
     'sync_host': False,
-    'dram_node2pages_map': True
+    'dram_translate': True
 }
 
 sample_sync_config = {
@@ -41,7 +42,7 @@ sample_sync_config = {
     'channel_forward': False,
     'sync_hop': True,
     'sync_host': False,
-    'dram_node2pages_map': True
+    'dram_translate': True
 }
 
 sample_async_config = {
@@ -50,14 +51,23 @@ sample_async_config = {
     'channel_forward': False,
     'sync_hop': False,
     'sync_host': False,
-    'dram_node2pages_map': True
+    'dram_translate': True
 }
 
-configs = [smartSage_config, smartSage_async_config, sample_sync_config, sample_async_config]
+sample_async_forward_config = {
+    'name': 'sample_async_forward',
+    'flash_sample': True,
+    'channel_forward': True,
+    'sync_hop': False,
+    'sync_host': False,
+    'dram_translate': False
+}
+
+configs = [smartSage_config, smartSage_async_config, sample_sync_config, sample_async_config, sample_async_forward_config]
 
 graph_params = {'feat_sz': 500, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 1, 'sample_per_hop': [3, 3, 3]}
+app_params = {'batch': 128, 'sample_per_hop': [3, 3, 3]}
 
 def rand_chip():
     return random.randrange(ssd_params['num_chip'])

@@ -1,3 +1,10 @@
+class CmdStat:
+    def __init__(self):
+        self.time = {}
+    def set_time(self, typ, time):
+        assert(typ in ['issue', 'read_begin', 'transfer_begin', 'transfer_end'])
+        self.time[typ] = time
+
 class Stat:
     def __init__(self, num_hop):
         self.num_hop = num_hop
@@ -15,9 +22,15 @@ class Stat:
         
         self.pcie_start_time = {}
         self.pcie_end_time = {}
-        self.firmware_waiting_time = []
         
+        self.ftl_start_time = []
+        self.ftl_end_time = []
+
+        self.total_host_delay = 0
+
         self.total_time = 0
+
+        self.cmd_stat = {}
 
     def channel_busy(self, now_time, delta):
         if len(self.channel_busy_n) == 0:
@@ -70,7 +83,7 @@ class Stat:
         self.dnn_end_time.append(now_time)
 
     def start_pcie(self, now_time, from_node, to_node):
-        pair = (from_node, to_node)
+        pair = f'{from_node}->{to_node}'
         if not pair in self.pcie_start_time:
             self.pcie_start_time[pair] = [now_time]
         else:
@@ -78,9 +91,18 @@ class Stat:
         print(pair, self.pcie_start_time[pair])
     
     def end_pcie(self, now_time, from_node, to_node):
-        pair = (from_node, to_node)
+        pair = f'{from_node}->{to_node}'
         if not pair in self.pcie_end_time:
             self.pcie_end_time[pair] = [now_time]
         else:
             self.pcie_end_time[pair].append(now_time)
         print(pair, self.pcie_end_time[pair])
+
+    def start_ftl(self, now_time):
+        self.ftl_start_time.append(now_time)
+
+    def end_ftl(self, now_time):
+        self.ftl_end_time.append(now_time)
+
+    def host_delay(self, delay):
+        self.total_host_delay += delay

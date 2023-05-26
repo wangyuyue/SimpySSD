@@ -54,8 +54,9 @@ class PCIeBus(Sim):
         
         self.system.stat.end_pcie(engine.now, src, dst)
         if 'ssd' in self.nodes:
-            end_time = engine.now + system_params['host_side_delay']
-            engine.add(Event(self.system, 'notify_app', end_time, {}))
+            delay = system_params['host_side_delay']
+            self.system.stat.host_delay(delay)
+            engine.add(Event(self.system, 'notify_app', engine.now + delay, {}))
 
         if not queue.empty():
             data_sz = queue.dequeue()

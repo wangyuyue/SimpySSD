@@ -51,12 +51,14 @@ class GNN:
         if graph_params['feat_together']:
             first_cmd.has_feat = True
 
-        if system_params['dram_node2pages_map']:
+        # for cmd in cmds:
+        #     self.issue(cmd)
+        # return
+        if system_params['dram_translate']:
             for cmd in cmds:
                 self.issue(cmd)
         else:
             assert(system_params['flash_sample'] == True)
-            assert(system_params['channel_forward'] == True)
             first_cmd.has_ext = True
             self.cmd2extcmds[first_cmd] = cmds[1:]
             self.issue(first_cmd)
@@ -68,7 +70,13 @@ class GNN:
 
     def issue(self, cmd):
         self.wait_completion.append(cmd)
-        self.system.issue_cmd(cmd)
+        # self.system.issue_cmd(cmd)
+        # return
+        if system_params['channel_forward']:
+            self.system.issue_cmd(cmd)
+        else:
+            sys = self.system
+            sys.ssd_dram.delay(sys, 'issue_cmd', {'cmd': cmd})
 
     def process(self, cmd):
         logger.debug(f"process {cmd}, pending: {self.wait_completion}")
@@ -133,6 +141,7 @@ def reset(gnn):
 if __name__ == "__main__":
     repeat = 1
     repeat_test = []
+    stat_dict = {}
     for i in range(repeat):
         random.seed(i)
         np.random.seed(i)
@@ -168,14 +177,23 @@ if __name__ == "__main__":
             while len(engine.events) > 0:
                 engine.exec()
             
-            print(system.stat.pcie_start_time)
-            print(system.stat.pcie_end_time)
             system.stat.total_time = engine.now
             latency.append(engine.now)
 
-        repeat_test.append(latency)
+            from stat_plot import *
+            stat_dict[config['name']] = system.stat
+        
+        print(stat_dict)
+        plot_sample_latency_breakdown(stat_dict)
+        plot_chip_utilization(stat_dict)
+        plot_channel_utilization(stat_dict)
+        plot_hop_breakdown(stat_dict)
+        plot_overall_latency_breakdown(stat_dict)
+        plot_speedup(stat_dict)
+        
+    #     repeat_test.append(latency)
 
-    # latency = [sum(list(t))/len(list(t)) for t in list(zip(*repeat_test))]
+    # latency = [sum(t)/len(t) for t in zip(*repeat_test)]
 
     # import seaborn as sns
     # dic = {}

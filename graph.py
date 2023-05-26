@@ -47,7 +47,7 @@ class RandomGraph(Graph):
 
     def get_feat_page(self, node):
         if self.feat_together:
-            return get_pages(node)[0]
+            return self.get_pages(node)[0]
         return self.get_random_page()
 
     def sample_per_page(self, node, n):

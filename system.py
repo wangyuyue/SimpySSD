@@ -2,14 +2,16 @@ from sim import *
 from ssd_estimate import SSD
 from pcie import PCIeBus
 from nn_accel import GNNAcc
-from dram_buffer import Buffer
+from dram import DRAM
 from util import *
+from sys_stat import *
 
 class System(Sim):
     def __init__(self):
         self.ssd = SSD(self)
         self.ssd_pcie = PCIeBus(self, 'ssd')
         self.gnn_accelerator = GNNAcc(self)
+        self.ssd_dram = DRAM(self)
         if system_params['accel_loc'] == 'pcie':
             self.dnn_pcie = PCIeBus(self, 'accel')
         self.app = None
@@ -17,7 +19,7 @@ class System(Sim):
 
     def set_app(self, app):
         self.app = app
-        self.dram_buf = Buffer(graph_params['feat_sz'], 100)
+        self.ssd_dram.add_buffer(graph_params['feat_sz'], 100)
 
     def set_stat(self, stat):
         self.stat = stat
@@ -34,6 +36,8 @@ class System(Sim):
             self.dnn_pcie.begin_pcie_transfer(data_sz, src)  
 
     def issue_cmd(self, cmd):
+        self.stat.cmd_stat[cmd] = CmdStat()
+        self.stat.cmd_stat[cmd].set_time('issue', engine.now)
         self.ssd.issue(cmd)
 
     def check_compute(self):
@@ -49,6 +53,9 @@ class System(Sim):
     def do(self, event):
         if event.func == 'notify_app':
             self.notify_app()
+        elif event.func == 'issue_cmd':
+            cmd = event.args['cmd']
+            self.issue_cmd(cmd)
         else:
             super().do(event)
 
