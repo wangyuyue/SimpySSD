@@ -34,8 +34,9 @@ class GNN:
     def sample_node(self, batch_i, node_id, hop_i):
         subgraph = self.subgraphs[batch_i]
         node_info = subgraph.node_infos[node_id]
-        pages = subgraph.pages_to_fetch(node_id)
+        pages = subgraph.get_edge_pages(node_id)
         cmds = []
+        print("pages", pages)
         for page in pages:
             page_id, channel_id, chip_id = page
             cmd_typ = 'read'
@@ -63,6 +64,18 @@ class GNN:
             self.cmd2extcmds[first_cmd] = cmds[1:]
             self.issue(first_cmd)
 
+    def fetch_node_feat(self, node_id):
+        page = self.graph.get_feat_page(self.graph.get_node(node_id))
+
+        page_id, channel_id, chip_id = page
+        cmd_typ = 'read'
+        if system_params['flash_sample']:
+            cmd_typ = 'sample'
+        cmd = Cmd(cmd_typ=cmd_typ, channel_id=channel_id, chip_id=chip_id, page_id=page_id)
+        cmd.has_feat = True
+        self.cmd2hop[cmd] = n_total_hop()
+        self.issue(cmd)
+
     def sample_nodes(self, batch):
         for batch_i, target_node in enumerate(batch):
             self.nodes_to_sample[batch_i].add(target_node.node_id)
@@ -83,8 +96,9 @@ class GNN:
         self.wait_completion.remove(cmd)
         
         self.current_hop = self.cmd2hop[cmd]
-        
-        self.system.stat.end_hop(engine.now, self.cmd2hop[cmd])
+        print("self.current_hop", self.current_hop)
+        if self.system.stat is not None:
+            self.system.stat.end_hop(engine.now, self.cmd2hop[cmd])
 
         if system_params['sync_hop']:
             # print("sync hop")
@@ -98,39 +112,78 @@ class GNN:
 
                     for sampled_node in sampled_nodes:
                         next_nodes_to_sample = subgraph.next_nodes_to_sample(sampled_node, self.current_hop + 1)
+                        print(f"{sampled_node}: next nodes to sample: {next_nodes_to_sample}")
                         nodes_to_sample.update(next_nodes_to_sample)
 
                 num_sampled_nodes = sum([len(x) for x in self.nodes_to_sample])
 
-                self.system.transfer(num_sampled_nodes * 4, 'ssd', 'host')
+                if self.current_hop < n_total_hop():
+                    self.system.transfer(num_sampled_nodes * 4, 'ssd', 'host', 'node_id')
+                else:
+                    node_ids = set().union(*[subgraph.get_node_ids() for subgraph in self.subgraphs])
+                    vec_sz = len(node_ids) * graph_params['feat_sz']
+
+                    if system_params['accel_loc'] == 'pcie':
+                        if graph_params['feat_in_mem'] is True:
+                            self.system.transfer(vec_sz, 'host', 'dnn_accel', 'feat')
+                        else:
+                            self.system.transfer(vec_sz, 'ssd', 'host', 'feat')
+                    else:
+                        if graph_params['feat_in_mem'] is True:
+                            self.system.transfer(vec_sz, 'host', 'ssd', 'feat')
+                        else:
+                            self.system.check_compute()                            
                 return
             else:
                 logger.debug(f"wait for other cmd in hop {self.current_hop}...")
         else:
-            batch_i = self.cmd2batch[cmd]
-            subgraph = self.subgraphs[batch_i]
-            self.nodes_to_sample[batch_i] = self.cmd2dst_node[cmd]
-            self.fetch_page_async(batch_i, self.nodes_to_sample[batch_i])
-            self.nodes_to_sample[batch_i] = set()
+            assert(graph_params['feat_together'] is True)
+            if self.current_hop < n_total_hop():
+                batch_i = self.cmd2batch[cmd]
+                subgraph = self.subgraphs[batch_i]
+                self.nodes_to_sample[batch_i] = self.cmd2dst_node[cmd]
+                self.fetch_page_async(batch_i, self.nodes_to_sample[batch_i])
+                self.nodes_to_sample[batch_i] = set()
+            else:
+                self.system.check_compute()
     
+    def get_pcie_notified(self, pcie_args):
+        print("pcie_args", pcie_args)
+        if pcie_args['data_type'] == 'node_id':
+            self.fetch_page_sync()
+        else:
+            if pcie_args['src'] == 'ssd' and pcie_args['dst'] == 'host' and pcie_args['data_type'] == 'feat':
+                self.system.transfer(pcie_args['data_sz'], 'host', 'dnn_accel', 'feat')
+            elif pcie_args['src'] == 'host' and pcie_args['dst'] == 'ssd' and pcie_args['data_type'] == 'feat':
+                self.system.check_compute()
+            elif pcie_args['src'] == 'host' and pcie_args['dst'] == 'dnn_accel' and pcie_args['data_type'] == 'feat':
+                self.system.check_compute()
+            else:
+                raise Exception(f"unknown pcie operation")
+
     def fetch_page_sync(self):
-        if self.current_hop == n_total_hop() - 1:
-            self.system.check_compute()
-            return
-        
         for batch_i, nodes_to_sample in enumerate(self.nodes_to_sample):
             self.fetch_page_async(batch_i, nodes_to_sample)
 
+        if graph_params['feat_together'] is False:
+            if self.current_hop == n_total_hop() - 1:
+                node_ids = set().union(*[subgraph.get_node_ids() for subgraph in self.subgraphs])
+                for node_id in node_ids:
+                    self.fetch_node_feat(node_id)
+
     def fetch_page_async(self, batch_i, nodes_to_sample):
-        if self.current_hop == n_total_hop() - 1:
-            self.system.check_compute()
-            return
+        print("fetch_page_async")
 
-        subgraph = self.subgraphs[batch_i]
-
-        for next_node_to_sample in nodes_to_sample:
-            self.sample_node(batch_i, next_node_to_sample, self.current_hop + 1)
-
+        if self.current_hop < n_total_hop() - 1:
+            for next_node_to_sample in nodes_to_sample:
+                self.sample_node(batch_i, next_node_to_sample, self.current_hop + 1)
+        elif self.current_hop == n_total_hop() - 1:
+            if graph_params['feat_together'] is True:
+            # when feature is stored together, we only need to fetch the last hop's features separately
+                for node_id in nodes_to_sample:
+                    self.fetch_node_feat(node_id)
+        else:
+            raise Exception(f"invalid hop {self.current_hop}")
 
 def reset(gnn):
     engine.now = 0
@@ -159,7 +212,6 @@ if __name__ == "__main__":
             # for node_i, node_info in subgraph.node_infos.items():
             #     print(node_i, node_info.pages)
         
-        latency = []
         for config in configs:
             print(f"config: {config['name']}")
             reset(gnn)
@@ -168,7 +220,7 @@ if __name__ == "__main__":
             system = System()
             system.set_app(gnn)
 
-            system.set_stat(Stat(n_total_hop()))
+            # system.set_stat(Stat(n_total_hop()))
             gnn.run_on(system)
 
             gnn.subgraphs = subgraphs
@@ -177,28 +229,14 @@ if __name__ == "__main__":
             while len(engine.events) > 0:
                 engine.exec()
             
-            system.stat.total_time = engine.now
-            latency.append(engine.now)
+            # system.stat.total_time = engine.now
 
-            from stat_plot import *
-            stat_dict[config['name']] = system.stat
-        
-        print(stat_dict)
-        plot_sample_latency_breakdown(stat_dict)
-        plot_chip_utilization(stat_dict)
-        plot_channel_utilization(stat_dict)
-        plot_hop_breakdown(stat_dict)
-        plot_overall_latency_breakdown(stat_dict)
-        plot_speedup(stat_dict)
-        
-    #     repeat_test.append(latency)
-
-    # latency = [sum(t)/len(t) for t in zip(*repeat_test)]
-
-    # import seaborn as sns
-    # dic = {}
-    # dic['name'] = [config['name'] for config in configs]
-    # dic['latency'] = [latency[0]/lat for lat in latency]
-    # plot = sns.barplot(x='name', y='latency', data=dic)
-    # plot.set(xlabel='config', ylabel='speedup')
-    # plot.get_figure().savefig(f'speedup_feat{graph_params["feat_sz"]}_batch_{app_params["batch"]}_hop_{"_".join([str(i) for i in app_params["sample_per_hop"]])}.png')
+            # from stat_plot import *
+            # stat_dict[config['name']] = system.stat
+        # print(stat_dict)
+        # plot_sample_latency_breakdown(stat_dict)
+        # plot_chip_utilization(stat_dict)
+        # plot_channel_utilization(stat_dict)
+        # plot_hop_breakdown(stat_dict)
+        # plot_overall_latency_breakdown(stat_dict)
+        # plot_speedup(stat_dict)

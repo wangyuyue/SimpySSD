@@ -14,6 +14,7 @@ ssd_params = {'channel_bw': 800, # MB/s
 
 system_params = {
     'pcie_bw': 4e3, # MB/s
+    # 'accel_loc': 'ssd',
     'accel_loc': 'pcie',
     'host_side_delay': 5, # us
 }
@@ -67,7 +68,7 @@ configs = [smartSage_config, smartSage_async_config, sample_sync_config, sample_
 
 graph_params = {'feat_sz': 500, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 128, 'sample_per_hop': [3, 3, 3]}
+app_params = {'batch': 1, 'sample_per_hop': [3]}
 
 def rand_chip():
     return random.randrange(ssd_params['num_chip'])

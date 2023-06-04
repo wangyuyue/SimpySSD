@@ -7,7 +7,7 @@ from util import *
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('ssd_logger')
 logger.setLevel(logging.DEBUG)
-logger.setLevel(0)
+# logger.setLevel(0)
 def assert_equal(x, y):
     try:
         assert(x == y)
@@ -57,6 +57,9 @@ class Chip(Sim):
 
     def record_flash_stat(self):
         stat = self.channel.ssd.system.stat
+        if stat is None:
+            return
+        
         delta = 1 if self.exec_cmd else -1
         stat.chip_busy(engine.now, delta)
         if self.exec_cmd is None:
@@ -82,7 +85,9 @@ class Chip(Sim):
         else:
             raise Exception("Unknown command type")
         self.record_flash_stat()
-        self.ssd.system.stat.cmd_stat[cmd].set_time('read_begin', engine.now)
+        stat = self.ssd.system.stat
+        if stat is not None:
+            stat.cmd_stat[cmd].set_time('read_begin', engine.now)
 
     def __repr__(self):
         return f"chip({self.channel.idx},{self.idx})"
@@ -236,6 +241,9 @@ class Channel(Sim):
 
     def record_channel_stat(self, is_busy):
         stat = self.ssd.system.stat
+        if stat is None:
+            return
+        
         delta = 1 if is_busy else -1
         stat.channel_busy(engine.now, delta)
 
@@ -301,7 +309,9 @@ class Channel(Sim):
         chip.transfer_done = False
         
         self.record_channel_stat(is_busy=True)
-        self.ssd.system.stat.cmd_stat[cmd].set_time('transfer_begin', engine.now)
+        stat = self.ssd.system.stat
+        if stat is not None:
+            stat.cmd_stat[cmd].set_time('transfer_begin', engine.now)
 
     def transfer_finish(self, cmd):
         logger.debug(f"[{engine.now}]: {self} transfer_finish {cmd}")
@@ -333,7 +343,9 @@ class Channel(Sim):
             engine.add(Event(self.ssd, 'get_result', engine.now, {'cmd': cmd}))
         
         self.record_channel_stat(is_busy=False)
-        self.ssd.system.stat.cmd_stat[cmd].set_time('transfer_end', engine.now)
+        stat = self.ssd.system.stat
+        if stat is not None:
+            stat.cmd_stat[cmd].set_time('transfer_end', engine.now)
 
         chip.check_exec()
         self.check_transfer()

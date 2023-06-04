@@ -12,8 +12,8 @@ class PCIeQueue:
         self.queue = []
     def dequeue(self):
         return self.queue.pop(0)
-    def enqueue(self, data_sz):
-        self.queue.append(data_sz)
+    def enqueue(self, data_sz, data_type):
+        self.queue.append((data_sz, data_type))
     def empty(self):
         return len(self.queue) == 0
 
@@ -35,35 +35,43 @@ class PCIeBus(Sim):
                 return queue, dst
         raise Exception("Invalid source node")
 
-    def begin_pcie_transfer(self, data_sz, src):
+    def begin_pcie_transfer(self, data_sz, src, data_type=None):
         queue, dst = self.get_queue_dst(src)
         if queue.busy:
-            queue.enqueue(data_sz)
+            queue.enqueue((data_sz, data_type))
         else:
             queue.busy = True
             aligned_sz = page_align_sz(data_sz)
             end_time = engine.now + aligned_sz / self.bandwidth
             logger.info(f"[{engine.now}]: {self} begin transfer {data_sz}B {src}->{dst}")
-            engine.add(Event(self, 'end_pcie_transfer', end_time, {'data_sz': data_sz, 'src': src}))
-            self.system.stat.start_pcie(engine.now, src, dst)
+            engine.add(Event(self, 'end_pcie_transfer', end_time, {'data_sz': data_sz, 'src': src, 'data_type': data_type}))
 
-    def end_pcie_transfer(self, data_sz, src):
+            if self.system.stat is not None:
+                self.system.stat.start_pcie(engine.now, src, dst)
+
+    def end_pcie_transfer(self, data_sz, src, data_type=None):
         queue, dst = self.get_queue_dst(src)
         queue.busy = False
         logger.info(f"[{engine.now}]: {self} end transfer {data_sz}B {src}->{dst}")
         
-        self.system.stat.end_pcie(engine.now, src, dst)
+        stat = self.system.stat
+        if stat is not None:
+            stat.end_pcie(engine.now, src, dst)
+        
+        delay = 0
         if 'ssd' in self.nodes:
             delay = system_params['host_side_delay']
-            self.system.stat.host_delay(delay)
-            engine.add(Event(self.system, 'notify_app', engine.now + delay, {}))
+        
+        if stat is not None:
+            stat.host_delay(delay)
+        engine.add(Event(self.system, 'notify_app', engine.now + delay, {'data_sz': data_sz, 'src': src, 'dst': dst, 'data_type': data_type}))
 
         if not queue.empty():
-            data_sz = queue.dequeue()
-            self.begin_pcie_transfer(data_sz, src)
+            data_sz, data_type = queue.dequeue()
+            self.begin_pcie_transfer(data_sz, src, data_type)
     
     def do(self, event):
         if event.func == 'end_pcie_transfer':
-            self.end_pcie_transfer(event.args['data_sz'], event.args['src'])
+            self.end_pcie_transfer(event.args['data_sz'], event.args['src'], event.args['data_type'])
         else:
             super().do(event)

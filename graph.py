@@ -22,7 +22,10 @@ class RandomGraph(Graph):
         super().__init__()
         self.page_id = 0
         self.node_id = 0
-        self.node2pages = {}
+        self.node2pages = {} # node -> edge-list pages
+        self.node_id2node = {} # node id -> node
+        if not self.feat_together:
+            self.node2feat_page = {} # node -> feature vector page
 
     def get_random_page(self):
         self.page_id += 1
@@ -45,10 +48,15 @@ class RandomGraph(Graph):
             self.set_pages(node)
         return self.node2pages[node.node_id]
 
+    def get_node(self, node_id):
+        return self.node_id2node[node_id]
+
     def get_feat_page(self, node):
         if self.feat_together:
             return self.get_pages(node)[0]
-        return self.get_random_page()
+        page = self.get_random_page()
+        self.node2feat_page[node.node_id] = page
+        return page
 
     def sample_per_page(self, node, n):
         node_id_list = random.sample(range(node.n_edge), n)
@@ -73,7 +81,10 @@ class RandomGraph(Graph):
         lval = slot_id * self.unit
         rval = lval + self.unit
         n_edge = random.randrange(lval, rval)
-        return Node(node_id, n_edge)
+        
+        node = Node(node_id, n_edge)
+        self.node_id2node[node_id] = node
+        return node
 
     def sample_edge(self):
         node_id = self.get_random_node_id()
@@ -81,7 +92,10 @@ class RandomGraph(Graph):
         lval = slot_id * self.unit
         rval = lval + self.unit
         n_edge = random.randrange(lval, rval)
-        return Node(node_id, n_edge)
+        
+        node = Node(node_id, n_edge)
+        self.node_id2node[node_id] = node
+        return node
     
     def draw_node_distribution(self, n_sample = 200000):
         samples = np.array([self.sample_node().n_edge // self.unit for i in range(n_sample)])

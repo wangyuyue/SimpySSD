@@ -2,9 +2,12 @@ from util import ssd_params
 from sim import *
 from lru import LRU
 
+def evicted(key, value):
+    print(f"removing {key}")
+
 class Buffer:
     def __init__(self, vec_size, max_num):
-        self.lru = LRU(max_num)
+        self.lru = LRU(max_num, callback=evicted) # callback can be used to implement reinsertion policy
         self.sz = vec_size * max_num
     
     def lookup(self, id):
@@ -43,8 +46,10 @@ class DRAM(Sim):
         event = Event(obj, func, self.next_avail_time, args)
         engine.add(event)
 
-        self.system.stat.start_ftl(avail_time)
-        self.system.stat.end_ftl(avail_time + self.latency)
+        stat = self.system.stat
+        if stat is not None:
+            self.system.stat.start_ftl(avail_time)
+            self.system.stat.end_ftl(avail_time + self.latency)
    
     def rw(self, data_sz):
         avail_time = max(self.next_avail_time, engine.now)

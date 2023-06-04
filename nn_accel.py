@@ -25,13 +25,15 @@ class GNNAcc(Sim):
         logger.info(f"[{engine.now}]: {self} begin compute")
         engine.add(Event(self, 'end_compute', engine.now + self.compute_latency, {}))
 
-        self.system.stat.start_dnn(engine.now)
+        if self.system.stat is not None:
+            self.system.stat.start_dnn(engine.now)
         
     def end_compute(self):
         self.status = GNNAcc.idle
         logger.info(f"[{engine.now}]: {self} end compute")
 
-        self.system.stat.end_dnn(engine.now)
+        if self.system.stat is not None:
+            self.system.stat.end_dnn(engine.now)
 
     def do(self, event):
         if event.func == 'end_compute':

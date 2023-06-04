@@ -13,7 +13,7 @@ class System(Sim):
         self.gnn_accelerator = GNNAcc(self)
         self.ssd_dram = DRAM(self)
         if system_params['accel_loc'] == 'pcie':
-            self.dnn_pcie = PCIeBus(self, 'accel')
+            self.dnn_pcie = PCIeBus(self, 'dnn_accel')
         self.app = None
         self.stat = None
 
@@ -27,17 +27,21 @@ class System(Sim):
     def process(self, cmd):
         self.app.process(cmd)
 
-    def transfer(self, data_sz, src, dst):
-        if src == 'ssd' and dst == 'dnn_accel':
-            raise Exception("doesn't support direct link")
+    def transfer(self, data_sz, src, dst, data_type):
         if src == 'ssd' and dst == 'host':
-            self.ssd_pcie.begin_pcie_transfer(data_sz, src)
-        if src == 'host' and dst == 'dnn_accel':
-            self.dnn_pcie.begin_pcie_transfer(data_sz, src)  
+            self.ssd_pcie.begin_pcie_transfer(data_sz, src, data_type)
+        elif src == 'host' and dst == 'dnn_accel':
+            self.dnn_pcie.begin_pcie_transfer(data_sz, src, data_type)
+        elif src == 'host' and dst == 'ssd':
+            self.ssd_pcie.begin_pcie_transfer(data_sz, src, data_type)
+        else:
+            print(src, dst)
+            raise Exception("Invalid transfer")
 
     def issue_cmd(self, cmd):
-        self.stat.cmd_stat[cmd] = CmdStat()
-        self.stat.cmd_stat[cmd].set_time('issue', engine.now)
+        if self.stat is not None:
+            self.stat.cmd_stat[cmd] = CmdStat()
+            self.stat.cmd_stat[cmd].set_time('issue', engine.now)
         self.ssd.issue(cmd)
 
     def check_compute(self):
@@ -47,12 +51,12 @@ class System(Sim):
     def compute(self):
         self.gnn_accelerator.begin_compute()
     
-    def notify_app(self):
-        self.app.fetch_page_sync()
+    def notify_app(self, pcie_args):
+        self.app.get_pcie_notified(pcie_args)
     
     def do(self, event):
         if event.func == 'notify_app':
-            self.notify_app()
+            self.notify_app(event.args)
         elif event.func == 'issue_cmd':
             cmd = event.args['cmd']
             self.issue_cmd(cmd)

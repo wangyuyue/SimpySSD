@@ -47,14 +47,19 @@ class SubGraph:
                     to_sample.append((hop + 1, dst_node))
 
     def next_nodes_to_sample(self, node_id, hop):
+        if hop > n_total_hop():
+            return []
         node_info = self.node_infos[node_id]
         return [node.node_id for node in node_info.sampled_edges][:n_sample_in_hop(hop)]
 
-    def pages_to_fetch(self, node_id):
+    def get_edge_pages(self, node_id):
         node_info = self.node_infos[node_id]
         pages = list(node_info.page2edges.keys())
         pages.sort(key=lambda x: x==node_info.pages[0], reverse=True)
         return pages
+
+    def get_node_ids(self):
+        return [node_id for node_id in self.node_infos.keys()]
 
     def show(self):
         print("subgraph:")
