@@ -70,7 +70,8 @@ def plot_chip_utilization(stat_dict):
             y = stat.chip_busy_n
             if smooth != None:
                 x, y = smooth_timeline(x, y, smooth)
-            sns.lineplot(x=x, y=y, drawstyle='steps-post', label=label, linestyle='-')
+            plot = sns.lineplot(x=x, y=y, drawstyle='steps-post', label=label, linestyle='-')
+            plot.set(xlabel='time (us)', ylabel='chip utilization')
         if sample:
             plt.savefig("chip_utilization_sample.png")
         else:
@@ -88,12 +89,13 @@ def plot_channel_utilization(stat_dict):
             y = stat.channel_busy_n
             if smooth != None:
                 x, y = smooth_timeline(x, y, smooth)
-            sns.lineplot(x=x, y=y, drawstyle='steps-post', label=label, linestyle='-')
+            plot = sns.lineplot(x=x, y=y, drawstyle='steps-post', label=label, linestyle='-')
+            plot.set(xlabel='time (us)', ylabel='channel utilization')
         if sample:
             plt.savefig("channel_utilization_sample.png")
         else:
             plt.savefig("channel_utilization.png")
-    draw(sample=True, smooth=1)
+    draw(sample=True, smooth=20)
     draw(sample=False, smooth=1)
 
 
@@ -121,7 +123,7 @@ def plot_overall_latency_breakdown(stat_dict):
         
         breakdown_list.append(breakdown)
     df = pd.DataFrame(breakdown_list)
-    df.plot(x='config', kind='bar', stacked=True, rot=15, title='Latency breakdown')
+    df.plot(x='config', kind='bar', stacked=True, rot=15, title='Latency breakdown', xlabel='config', ylabel='latency (us)')
     plt.savefig("overall_latency_breakdown.png", bbox_inches="tight")
 
 def plot_sample_latency_breakdown(stat_dict):
@@ -148,7 +150,7 @@ def plot_sample_latency_breakdown(stat_dict):
         breakdown_list.append(breakdown)
 
     df = pd.DataFrame(breakdown_list, index=configs)
-    df.plot.barh(stacked=True)
+    df.plot.barh(stacked=True, xlabel='latency (us)', ylabel='config', title='Command latency breakdown')
     plt.savefig("command_latency_breakdown.png", bbox_inches="tight")
 
 def plot_speedup(stat_dict):
@@ -174,13 +176,13 @@ def plot_hop_breakdown(stat_dict):
     for label, stat in stat_dict.items():
         configs.append(label)
         hop_latency = []
-        for hop in range(stat.num_hop):
-            if hop < stat.num_hop - 1:
+        for hop in range(stat.num_hop+1):
+            if hop < stat.num_hop:
                 hop_latency.append(stat.hop_start_time[hop+1] - stat.hop_start_time[hop])
             else:
                 hop_latency.append(stat.hop_end_time[hop] - stat.hop_start_time[hop])
         breakdown = {f'hop_{i}': lat for i, lat in enumerate(hop_latency)}
         breakdown_list.append(breakdown)
     df = pd.DataFrame(breakdown_list, index=configs)
-    df.plot.barh(stacked=True)
+    df.plot.barh(stacked=True, xlabel='latency (us)', ylabel='config', title='Hop latency breakdown')
     plt.savefig("hop_latency_breakdown.png", bbox_inches="tight")

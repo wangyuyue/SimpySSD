@@ -6,8 +6,8 @@ from util import *
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('ssd_logger')
-logger.setLevel(logging.DEBUG)
-# logger.setLevel(0)
+# logger.setLevel(logging.DEBUG)
+logger.setLevel(0)
 def assert_equal(x, y):
     try:
         assert(x == y)

@@ -36,7 +36,6 @@ class GNN:
         node_info = subgraph.node_infos[node_id]
         pages = subgraph.get_edge_pages(node_id)
         cmds = []
-        print("pages", pages)
         for page in pages:
             page_id, channel_id, chip_id = page
             cmd_typ = 'read'
@@ -96,7 +95,6 @@ class GNN:
         self.wait_completion.remove(cmd)
         
         self.current_hop = self.cmd2hop[cmd]
-        print("self.current_hop", self.current_hop)
         if self.system.stat is not None:
             self.system.stat.end_hop(engine.now, self.cmd2hop[cmd])
 
@@ -112,7 +110,6 @@ class GNN:
 
                     for sampled_node in sampled_nodes:
                         next_nodes_to_sample = subgraph.next_nodes_to_sample(sampled_node, self.current_hop + 1)
-                        print(f"{sampled_node}: next nodes to sample: {next_nodes_to_sample}")
                         nodes_to_sample.update(next_nodes_to_sample)
 
                 num_sampled_nodes = sum([len(x) for x in self.nodes_to_sample])
@@ -148,7 +145,6 @@ class GNN:
                 self.system.check_compute()
     
     def get_pcie_notified(self, pcie_args):
-        print("pcie_args", pcie_args)
         if pcie_args['data_type'] == 'node_id':
             self.fetch_page_sync()
         else:
@@ -172,8 +168,6 @@ class GNN:
                     self.fetch_node_feat(node_id)
 
     def fetch_page_async(self, batch_i, nodes_to_sample):
-        print("fetch_page_async")
-
         if self.current_hop < n_total_hop() - 1:
             for next_node_to_sample in nodes_to_sample:
                 self.sample_node(batch_i, next_node_to_sample, self.current_hop + 1)
@@ -220,7 +214,7 @@ if __name__ == "__main__":
             system = System()
             system.set_app(gnn)
 
-            # system.set_stat(Stat(n_total_hop()))
+            system.set_stat(Stat(n_total_hop()))
             gnn.run_on(system)
 
             gnn.subgraphs = subgraphs
@@ -229,14 +223,14 @@ if __name__ == "__main__":
             while len(engine.events) > 0:
                 engine.exec()
             
-            # system.stat.total_time = engine.now
+            system.stat.total_time = engine.now
 
-            # from stat_plot import *
-            # stat_dict[config['name']] = system.stat
-        # print(stat_dict)
-        # plot_sample_latency_breakdown(stat_dict)
-        # plot_chip_utilization(stat_dict)
-        # plot_channel_utilization(stat_dict)
-        # plot_hop_breakdown(stat_dict)
-        # plot_overall_latency_breakdown(stat_dict)
-        # plot_speedup(stat_dict)
+            from stat_plot import *
+            stat_dict[config['name']] = system.stat
+        print(stat_dict)
+        plot_sample_latency_breakdown(stat_dict)
+        plot_chip_utilization(stat_dict)
+        plot_channel_utilization(stat_dict)
+        plot_hop_breakdown(stat_dict)
+        plot_overall_latency_breakdown(stat_dict)
+        plot_speedup(stat_dict)

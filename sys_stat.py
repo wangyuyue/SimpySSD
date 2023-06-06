@@ -8,8 +8,8 @@ class CmdStat:
 class Stat:
     def __init__(self, num_hop):
         self.num_hop = num_hop
-        self.hop_start_time = [0] * num_hop
-        self.hop_end_time = [0] * num_hop
+        self.hop_start_time = [0] * (num_hop + 1)
+        self.hop_end_time = [0] * (num_hop + 1)
         
         self.channel_busy_n = []
         self.channel_busy_time = []

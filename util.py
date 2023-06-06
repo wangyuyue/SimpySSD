@@ -2,20 +2,21 @@ import random
 import math
 
 ssd_params = {'channel_bw': 800, # MB/s
-         'read_latency': 3, # us
+         'read_latency': 20, # us
          'write_latency': 30, # us
          'pg_sz': 4, # KB 
          'num_chip':8,
          'num_channel':16,
          'dram_bw': 16e3, #MB/s
          'dram_latency': 0.10, #us
-         'dram_capacity': 4e3 # MB
+         'dram_capacity': 4e3, # MB
+         'n_cores': 4,
         }
 
 system_params = {
     'pcie_bw': 4e3, # MB/s
-    # 'accel_loc': 'ssd',
-    'accel_loc': 'pcie',
+    'accel_loc': 'ssd',
+    # 'accel_loc': 'pcie',
     'host_side_delay': 5, # us
 }
 
@@ -68,7 +69,7 @@ configs = [smartSage_config, smartSage_async_config, sample_sync_config, sample_
 
 graph_params = {'feat_sz': 500, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 1, 'sample_per_hop': [3]}
+app_params = {'batch': 128, 'sample_per_hop': [3, 3, 3]}
 
 def rand_chip():
     return random.randrange(ssd_params['num_chip'])

@@ -32,7 +32,9 @@ class DRAM(Sim):
         self.capacity = ssd_params['dram_capacity']
       
         self.buffer = None
-        self.next_avail_time = 0
+
+        self.core_next_avail_time = [0] * ssd_params['n_cores']
+        self.dram_next_avail_time = 0
 
     def __repr__(self):
         return f'SSD-DRAM'
@@ -41,9 +43,12 @@ class DRAM(Sim):
         self.buffer = Buffer(vec_size, max_num)
 
     def delay(self, obj, func, args):
-        avail_time = max(self.next_avail_time, engine.now)
-        self.next_avail_time = avail_time + self.latency
-        event = Event(obj, func, self.next_avail_time, args)
+        min_avail_time = min(self.core_next_avail_time)
+        core_i = self.core_next_avail_time.index(min_avail_time)
+        
+        avail_time = max(min_avail_time, engine.now)
+        self.core_next_avail_time[core_i] = avail_time + self.latency * 2
+        event = Event(obj, func, avail_time + self.latency, args)
         engine.add(event)
 
         stat = self.system.stat
@@ -52,5 +57,5 @@ class DRAM(Sim):
             self.system.stat.end_ftl(avail_time + self.latency)
    
     def rw(self, data_sz):
-        avail_time = max(self.next_avail_time, engine.now)
-        self.next_avail_time = avail_time + self.latency + data_sz / self.bandwidth
+        avail_time = max(self.dram_next_avail_time, engine.now)
+        self.dram_next_avail_time = avail_time + self.latency + data_sz / self.bandwidth
