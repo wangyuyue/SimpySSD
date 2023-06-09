@@ -3,6 +3,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from util import *
+from ssd_config import ssd_config
 
 class Graph:
     def __init__(self):
@@ -40,7 +41,7 @@ class RandomGraph(Graph):
         sz = node.n_edge * 4
         if self.feat_together:
             sz += self.feat_sz
-        n_page = math.ceil(sz / (1e3 * ssd_params['pg_sz']))
+        n_page = math.ceil(sz / (1e3 * ssd_config.pg_sz_kb))
         self.node2pages[node.node_id] = [self.get_random_page() for i in range(n_page)]
 
     def get_pages(self, node):
@@ -65,7 +66,7 @@ class RandomGraph(Graph):
             offset += self.feat_sz
         sample_per_page = {}
         for node_id in node_id_list:
-            page_id = math.floor((offset + (node_id + 1) * 4) / (1e3 * ssd_params['pg_sz']))
+            page_id = math.floor((offset + (node_id + 1) * 4) / (1e3 * ssd_config.pg_sz_kb))
             sample_per_page[page_id] = sample_per_page.get(page_id, 0) + 1
         return sample_per_page
 

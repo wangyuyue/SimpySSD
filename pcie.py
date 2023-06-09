@@ -1,6 +1,7 @@
 import logging
 from sim import *
-from util import system_params, page_align_sz
+from util import page_align_sz
+from system_config import system_config
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('pcie logger')
@@ -20,7 +21,7 @@ class PCIeQueue:
 class PCIeBus(Sim):
     def __init__(self, system, node1, node2='host'):
         self.pcie_queue = [PCIeQueue(), PCIeQueue()]
-        self.bandwidth = system_params['pcie_bw']
+        self.bandwidth = system_config.pcie_bw_mbps
         self.system = system
         self.nodes = [node1, node2]
 
@@ -60,7 +61,7 @@ class PCIeBus(Sim):
         
         delay = 0
         if 'ssd' in self.nodes:
-            delay = system_params['host_side_delay']
+            delay = system_config.host_side_delay_us
         
         if stat is not None:
             stat.host_delay(delay)

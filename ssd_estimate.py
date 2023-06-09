@@ -2,7 +2,7 @@ import random
 import logging
 from sim import *
 from util import *
-
+from ssd_config import ssd_config
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('ssd_logger')
@@ -23,7 +23,7 @@ class SRAM_Buffer:
     ready_to_execute = 4
     def __init__(self):
         self.cmd = None
-        self.size = ssd_params['pg_sz']
+        self.size = ssd_config.pg_sz_kb
         self.empty = True
 
 class Chip(Sim):
@@ -35,8 +35,8 @@ class Chip(Sim):
 
         self.avail_time = 0
 
-        self.read_latency = ssd_params['read_latency']
-        self.write_latency = ssd_params['write_latency']
+        self.read_latency = ssd_config.read_latency_us
+        self.write_latency = ssd_config.write_latency_us
 
         self.queued_cmd = []
 
@@ -224,9 +224,9 @@ class Channel(Sim):
         self.idx = idx
         self.avail_time = 0
 
-        self.bw = ssd_params['channel_bw']
+        self.bw = ssd_config.channel_bw_mbps
 
-        self.num_chip = ssd_params['num_chip']
+        self.num_chip = ssd_config.num_chip
         self.chips = [Chip(self, i) for i in range(self.num_chip)]
 
         self.transfer_cmd = None
@@ -369,8 +369,8 @@ class SSD(Sim):
     def __init__(self, system):
         # logger.info("Init SSD...")
         self.aval_time = 0
-        self.num_channel = ssd_params['num_channel']
-        self.num_chip = ssd_params['num_chip']
+        self.num_channel = ssd_config.num_channel
+        self.num_chip = ssd_config.num_chip
         self.channels = [Channel(self, i) for i in range(self.num_channel)]
         
         self.system = system
@@ -414,7 +414,7 @@ class Cmd:
         self.channel_id = channel_id
         self.chip_id = chip_id
         
-        self.data_sz = data_sz or ssd_params['pg_sz'] * 1e3
+        self.data_sz = data_sz or ssd_config.pg_sz_kb * 1e3
         self.has_ext = False
         self.has_feat = False
 

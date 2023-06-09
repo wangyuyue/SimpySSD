@@ -5,6 +5,7 @@ from nn_accel import GNNAcc
 from dram import DRAM
 from util import *
 from sys_stat import *
+from accel_config import accel_config
 
 class System(Sim):
     def __init__(self):
@@ -12,7 +13,7 @@ class System(Sim):
         self.ssd_pcie = PCIeBus(self, 'ssd')
         self.gnn_accelerator = GNNAcc(self)
         self.ssd_dram = DRAM(self)
-        if system_params['accel_loc'] == 'pcie':
+        if accel_config.accel_loc == 'pcie':
             self.dnn_pcie = PCIeBus(self, 'dnn_accel')
         self.app = None
         self.stat = None

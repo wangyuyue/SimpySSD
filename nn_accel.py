@@ -1,7 +1,7 @@
 import logging
 from sim import *
-from util import system_params
-
+from system_config import system_config
+from accel_config import accel_config
 
 logging.basicConfig(format="%(levelname)s: %(message)s")
 logger = logging.getLogger('acc logger')
@@ -11,7 +11,7 @@ class GNNAcc(Sim):
     idle = 0
     computing = 1
     def __init__(self, system):
-        self.location = system_params['accel_loc']
+        self.location = accel_config.accel_loc
         self.compute_latency = 50
         self.status = GNNAcc.idle
         

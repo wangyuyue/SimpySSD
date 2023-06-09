@@ -4,6 +4,7 @@ import pandas as pd
 
 from sys_stat import Stat
 from util import *
+from ssd_config import ssd_config
 
 sns.set_theme()
 # marker: s(square), o(circle)
@@ -134,7 +135,7 @@ def plot_sample_latency_breakdown(stat_dict):
         configs.append(label)
         cmd_stats = stat.cmd_stat
         wait_time1 = 0
-        read_time = ssd_params['read_latency']
+        read_time = ssd_config.read_latency_us
         sample_time = 1
         wait_time2 = 0
         transfer_time = 0

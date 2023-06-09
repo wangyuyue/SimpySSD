@@ -1,12 +1,16 @@
 from sim import engine
 from ssd_estimate import logger, SSD, Cmd
 from system import System
-from util import *
+from util import batch_size, n_total_hop
+from util import graph_params, config_names
 import graph
 from subgraph import SubGraph
 import random
 import numpy as np
 from sys_stat import *
+from ssd_config import ssd_config
+from system_config import system_config, set_system_config
+from accel_config import accel_config
 
 class GNN:
     def __init__(self, graph):
@@ -39,7 +43,7 @@ class GNN:
         for page in pages:
             page_id, channel_id, chip_id = page
             cmd_typ = 'read'
-            if system_params['flash_sample']:
+            if system_config.flash_sample:
                 cmd_typ = 'sample'
             cmd = Cmd(cmd_typ=cmd_typ, channel_id=channel_id, chip_id=chip_id, page_id=page_id)
             self.cmd2batch[cmd] = batch_i
@@ -54,11 +58,11 @@ class GNN:
         # for cmd in cmds:
         #     self.issue(cmd)
         # return
-        if system_params['dram_translate']:
+        if system_config.dram_translate:
             for cmd in cmds:
                 self.issue(cmd)
         else:
-            assert(system_params['flash_sample'] == True)
+            assert(system_config.flash_sample is True)
             first_cmd.has_ext = True
             self.cmd2extcmds[first_cmd] = cmds[1:]
             self.issue(first_cmd)
@@ -68,7 +72,7 @@ class GNN:
 
         page_id, channel_id, chip_id = page
         cmd_typ = 'read'
-        if system_params['flash_sample']:
+        if system_config.flash_sample:
             cmd_typ = 'sample'
         cmd = Cmd(cmd_typ=cmd_typ, channel_id=channel_id, chip_id=chip_id, page_id=page_id)
         cmd.has_feat = True
@@ -84,7 +88,7 @@ class GNN:
         self.wait_completion.append(cmd)
         # self.system.issue_cmd(cmd)
         # return
-        if system_params['channel_forward']:
+        if system_config.channel_forward:
             self.system.issue_cmd(cmd)
         else:
             sys = self.system
@@ -98,7 +102,7 @@ class GNN:
         if self.system.stat is not None:
             self.system.stat.end_hop(engine.now, self.cmd2hop[cmd])
 
-        if system_params['sync_hop']:
+        if system_config.sync_hop:
             # print("sync hop")
             if len(self.wait_completion) == 0:
                 last_hop_sampled_nodes = self.nodes_to_sample
@@ -120,7 +124,7 @@ class GNN:
                     node_ids = set().union(*[subgraph.get_node_ids() for subgraph in self.subgraphs])
                     vec_sz = len(node_ids) * graph_params['feat_sz']
 
-                    if system_params['accel_loc'] == 'pcie':
+                    if accel_config.accel_loc == 'pcie':
                         if graph_params['feat_in_mem'] is True:
                             self.system.transfer(vec_sz, 'host', 'dnn_accel', 'feat')
                         else:
@@ -186,6 +190,8 @@ def reset(gnn):
     gnn.reset_hop()
 
 if __name__ == "__main__":
+    ssd_config.read_conf_file('configs/ssd/traditional_ssd.cfg')
+    ssd_config.dump()
     repeat = 1
     repeat_test = []
     stat_dict = {}
@@ -206,10 +212,13 @@ if __name__ == "__main__":
             # for node_i, node_info in subgraph.node_infos.items():
             #     print(node_i, node_info.pages)
         
-        for config in configs:
-            print(f"config: {config['name']}")
+        for config_name in config_names:
+        # for config in configs:
+            # print(f"config: {config['name']}")
+            set_system_config(config_name)
+            system_config.dump()
             reset(gnn)
-            system_params.update(config)
+            # system_params.update(config)
 
             system = System()
             system.set_app(gnn)
@@ -226,7 +235,8 @@ if __name__ == "__main__":
             system.stat.total_time = engine.now
 
             from stat_plot import *
-            stat_dict[config['name']] = system.stat
+            # stat_dict[config['name']] = system.stat
+            stat_dict[system_config.name] = system.stat
         print(stat_dict)
         plot_sample_latency_breakdown(stat_dict)
         plot_chip_utilization(stat_dict)

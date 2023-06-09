@@ -30,6 +30,6 @@ class GNN:
                 print(f"n_vec: {n_vec} input sz: {input_sz}, output sz: {output_sz}")
 
 if __name__ == '__main__':
-    gnn = GNN([3, 3, 2], 512, 10, 128)
+    gnn = GNN([3, 3, 3], 512, 10, 128)
     gnn.gen_forward()
     gnn.gen_backward()

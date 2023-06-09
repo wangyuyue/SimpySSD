@@ -1,6 +1,6 @@
-from util import ssd_params
 from sim import *
 from lru import LRU
+from ssd_config import ssd_config
 
 def evicted(key, value):
     print(f"removing {key}")
@@ -27,13 +27,13 @@ class DRAM(Sim):
     def __init__(self, system):
         self.system = system
       
-        self.latency = ssd_params['dram_latency']
-        self.bandwidth = ssd_params['dram_bw']
-        self.capacity = ssd_params['dram_capacity']
+        self.latency = ssd_config.dram_latency_us
+        self.bandwidth = ssd_config.dram_bw_mbps
+        self.capacity = ssd_config.dram_capacity_mb
       
         self.buffer = None
 
-        self.core_next_avail_time = [0] * ssd_params['n_cores']
+        self.core_next_avail_time = [0] * ssd_config.n_cores
         self.dram_next_avail_time = 0
 
     def __repr__(self):
@@ -47,7 +47,7 @@ class DRAM(Sim):
         core_i = self.core_next_avail_time.index(min_avail_time)
         
         avail_time = max(min_avail_time, engine.now)
-        self.core_next_avail_time[core_i] = avail_time + self.latency * 2
+        self.core_next_avail_time[core_i] = avail_time + self.latency
         event = Event(obj, func, avail_time + self.latency, args)
         engine.add(event)
 
