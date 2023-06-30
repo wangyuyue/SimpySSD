@@ -4,9 +4,9 @@ from ssd_config import ssd_config
 
 config_names = ['smartSage', 'smartSage_async', 'sample_sync', 'sample_async', 'sample_async_forward']
 
-graph_params = {'feat_sz': 500, 'n_node': 2e20, 'feat_in_mem': False,'feat_together': True}
+graph_params = {'feat_sz': 500, 'n_node': 1e6, 'feat_in_mem': False,'feat_together': True}
 
-app_params = {'batch': 128, 'sample_per_hop': [3, 3, 3], 'hidden_dim':128, 'output_dim':10}
+app_params = {'batch': 512, 'sample_per_hop': [3, 3, 3], 'hidden_dim':128, 'output_dim':10}
 
 def rand_chip():
     return random.randrange(ssd_config.num_chip)

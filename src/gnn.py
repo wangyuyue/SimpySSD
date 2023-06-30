@@ -190,7 +190,7 @@ def reset(gnn):
     gnn.reset_hop()
 
 if __name__ == "__main__":
-    ssd_config.read_conf_file('configs/ssd/traditional_ssd.cfg')
+    ssd_config.read_conf_file('configs/ssd/ultra_low_latency_ssd.cfg')
     ssd_config.dump()
     repeat = 1
     repeat_test = []

@@ -99,6 +99,7 @@ class RandomGraph(Graph):
         return node
     
     def draw_node_distribution(self, n_sample = 200000):
+        # bar x has height y means the probability of sampling a node with about x edges is y
         samples = np.array([self.sample_node().n_edge // self.unit for i in range(n_sample)])
         count = np.bincount(samples)
         k = np.arange(1, samples.max() + 1)
@@ -109,6 +110,7 @@ class RandomGraph(Graph):
         plt.savefig(f'{type(self).__name__}_node.png')
 
     def draw_edge_distribution(self, n_sample = 200000):
+        # bar x has height y means the probability of sampling an edge that points to a x-neighbors node is y
         samples = np.array([self.sample_edge().n_edge // self.unit for i in range(n_sample)])
         count = np.bincount(samples)
         k = np.arange(1, samples.max() + 1)
