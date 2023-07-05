@@ -190,7 +190,7 @@ def reset(gnn):
     gnn.reset_hop()
 
 if __name__ == "__main__":
-    ssd_config.read_conf_file('configs/ssd/ultra_low_latency_ssd.cfg')
+    ssd_config.read_conf_file('configs/ssd/traditional_ssd.cfg')
     ssd_config.dump()
     repeat = 1
     repeat_test = []
@@ -238,9 +238,14 @@ if __name__ == "__main__":
             # stat_dict[config['name']] = system.stat
             stat_dict[system_config.name] = system.stat
         print(stat_dict)
-        plot_sample_latency_breakdown(stat_dict)
-        plot_chip_utilization(stat_dict)
-        plot_channel_utilization(stat_dict)
-        plot_hop_breakdown(stat_dict)
-        plot_overall_latency_breakdown(stat_dict)
-        plot_speedup(stat_dict)
+        dump_chip_utilization(stat_dict)
+        dump_sample_latency_breakdown(stat_dict)
+        dump_overall_latency_breakdown(stat_dict)
+        dump_speedup(stat_dict)
+        dump_hop_breakdown(stat_dict)
+        # plot_sample_latency_breakdown(stat_dict)
+        # plot_chip_utilization(stat_dict)
+        # plot_channel_utilization(stat_dict)
+        # plot_hop_breakdown(stat_dict)
+        # plot_overall_latency_breakdown(stat_dict)
+        # plot_speedup(stat_dict)
