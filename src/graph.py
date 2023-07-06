@@ -55,23 +55,26 @@ class RandomGraph(Graph):
     def get_feat_page(self, node):
         if self.feat_together:
             return self.get_pages(node)[0]
-        page = self.get_random_page()
-        self.node2feat_page[node.node_id] = page
-        return page
+        node_id = node.node_id
+        if not node_id in self.node2feat_page:
+            self.node2feat_page[node_id] = self.get_random_page()
+        return self.node2feat_page[node_id]
 
-    def sample_per_page(self, node, n):
-        node_id_list = random.sample(range(node.n_edge), n)
+    def sample_per_page(self, node_relative_id_list):
         offset = 0
         if self.feat_together:
             offset += self.feat_sz
         sample_per_page = {}
-        for node_id in node_id_list:
-            page_id = math.floor((offset + (node_id + 1) * 4) / (1e3 * ssd_config.pg_sz_kb))
-            sample_per_page[page_id] = sample_per_page.get(page_id, 0) + 1
+        for node_relative_id in node_relative_id_list:
+            page_relative_id = math.floor((offset + (node_relative_id + 1) * 4) / (1e3 * ssd_config.pg_sz_kb))
+            sample_per_page[page_relative_id] = sample_per_page.get(page_relative_id, 0) + 1
         return sample_per_page
 
     def sample_n(self, node, n):
-        return [self.sample_edge() for i in range(n)]
+        node_relative_id_list = random.sample(range(node.n_edge), n)
+        sample_per_page = self.sample_per_page(node_relative_id_list)
+        neighbors = [self.sample_edge() for i in range(n)]
+        return sample_per_page, neighbors
 
     def get_batch(self, batch_size):
         return [self.sample_node() for i in range(batch_size)]

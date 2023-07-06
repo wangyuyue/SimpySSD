@@ -38,8 +38,7 @@ class SubGraph:
                 continue
             
             n_sample = n_sample_in_hop(hop)
-            sample_per_page = self.graph.sample_per_page(node, n_sample)
-            sampled_edges = self.graph.sample_n(node, n_sample)
+            sample_per_page, sampled_edges = self.graph.sample_n(node, n_sample)
             node_info.set_sample(sample_per_page, sampled_edges)
 
             for dst_node in sampled_edges:
