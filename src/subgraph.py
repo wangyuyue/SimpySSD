@@ -24,46 +24,54 @@ class SubGraph:
         self.graph = graph
         self.target_node = target_node
         self.node_infos = {}
+        self.node_cnt = 0
 
     def sample(self):
-        to_sample = []
-        to_sample.append((1, self.target_node)) # (hop, node)
+        to_sample = [(1, self.node_cnt, self.target_node)] # (hop, new_id, node)
+        self.node_cnt += 1
         while len(to_sample) > 0:
-            hop, node = to_sample.pop(0)
+            hop, new_id, node = to_sample.pop(0)
             node_info = NodeInfo(node)
-            self.node_infos[node.node_id] = node_info
+            self.node_infos[new_id] = node_info
             node_info.set_pages(self.graph.get_pages(node))
             
             if hop > n_total_hop():
                 continue
             
             n_sample = n_sample_in_hop(hop)
-            sample_per_page, sampled_edges = self.graph.sample_n(node, n_sample)
-            node_info.set_sample(sample_per_page, sampled_edges)
+            sample_per_page, sampled_neighbors = self.graph.sample_n(node, n_sample)
+            
+            new_ids = list(range(self.node_cnt, self.node_cnt + n_sample))
+            node_info.set_sample(sample_per_page, new_ids)
+            
+            for new_id, dst_node in zip(new_ids, sampled_neighbors):
+                to_sample.append((hop + 1, new_id, dst_node))
+            self.node_cnt += n_sample
 
-            for dst_node in sampled_edges:
-                if not dst_node.node_id in self.node_infos:
-                    to_sample.append((hop + 1, dst_node))
-
-    def next_nodes_to_sample(self, node_id, hop):
+    def next_node_new_ids_to_sample(self, new_id, hop):
         if hop > n_total_hop():
             return []
-        node_info = self.node_infos[node_id]
-        return [node.node_id for node in node_info.sampled_edges][:n_sample_in_hop(hop)]
+        node_info = self.node_infos[new_id]
+        return [new_id for new_id in node_info.sampled_edges]
 
-    def get_edge_pages(self, node_id):
-        node_info = self.node_infos[node_id]
+    def get_edge_pages(self, new_id):
+        node_info = self.node_infos[new_id]
         pages = list(node_info.page2edges.keys())
         pages.sort(key=lambda x: x==node_info.pages[0], reverse=True)
         return pages
 
     def get_node_ids(self):
-        return [node_id for node_id in self.node_infos.keys()]
+        return [self.node_infos[new_id].node.node_id for new_id in self.node_infos.keys()]
+
+    def get_node_id(self, new_id):
+        return self.node_infos[new_id].node.node_id
 
     def show(self):
         print("subgraph:")
-        for node_id in self.node_infos:
-            node_info = self.node_infos[node_id]
-            print(f"node {node_id}({node_info.node.n_edge})")
+        for new_id in self.node_infos:
+            node_info = self.node_infos[new_id]
+            node = node_info.node
+            print(f"node {node.node_id}(#neighbor:{node.n_edge})")
             if node_info.sampled_edges:
-                print([f'edge({node_id}-{node.node_id})' for node in node_info.sampled_edges])
+                neighbor_ids = [self.node_infos[neighbor_new_id].node.node_id for neighbor_new_id in node_info.sampled_edges]
+                print([f'edge({node.node_id}-{neighbor_id})' for neighbor_id in neighbor_ids])

@@ -22,7 +22,7 @@ class RandomGraph(Graph):
     def __init__(self):
         super().__init__()
         self.page_id = 0
-        self.node_id = 0
+        self.node_id = 100
         self.node2pages = {} # node -> edge-list pages
         self.node_id2node = {} # node id -> node
         if not self.feat_together:

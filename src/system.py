@@ -43,6 +43,7 @@ class System(Sim):
         if self.stat is not None:
             self.stat.cmd_stat[cmd] = CmdStat()
             self.stat.cmd_stat[cmd].set_time('issue', engine.now)
+
         self.ssd.issue(cmd)
 
     def check_compute(self):

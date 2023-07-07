@@ -4,6 +4,7 @@ from system import System
 from util import batch_size, n_total_hop
 from util import graph_params, config_names
 import graph
+import networkx_graph
 from subgraph import SubGraph
 import random
 import numpy as np
@@ -28,17 +29,21 @@ class GNN:
         self.current_hop = 0
         self.cmd2batch = {}
         self.cmd2hop = {}
-        self.cmd2dst_node = {}
+        self.cmd2dst_node_new_ids = {}
         self.cmd2extcmds = {}
 
     def reset_hop(self):
-        self.nodes_to_sample = [set() for i in range(batch_size())]
+        self.node_new_ids_to_sample = [set() for i in range(batch_size())]
         self.wait_completion = []
 
-    def sample_node(self, batch_i, node_id, hop_i):
+    def sample_node(self, batch_i, node_new_id, hop_i):
         subgraph = self.subgraphs[batch_i]
-        node_info = subgraph.node_infos[node_id]
-        pages = subgraph.get_edge_pages(node_id)
+        node_info = subgraph.node_infos[node_new_id]
+        pages = subgraph.get_edge_pages(node_new_id)
+        if len(pages) == 0:
+            print('isolated node')
+            return
+        
         cmds = []
         for page in pages:
             page_id, channel_id, chip_id = page
@@ -47,10 +52,10 @@ class GNN:
                 cmd_typ = 'sample'
             cmd = Cmd(cmd_typ=cmd_typ, channel_id=channel_id, chip_id=chip_id, page_id=page_id)
             self.cmd2batch[cmd] = batch_i
-            self.cmd2dst_node[cmd] = {node.node_id for node in node_info.page2edges.get(page, {})}
+            self.cmd2dst_node_new_ids[cmd] = {node_new_id for node_new_id in node_info.page2edges.get(page, {})}
             self.cmd2hop[cmd] = hop_i
             cmds.append(cmd)
-        
+
         first_cmd = cmds[0]
         if graph_params['feat_together']:
             first_cmd.has_feat = True
@@ -81,8 +86,10 @@ class GNN:
 
     def sample_nodes(self, batch):
         for batch_i, target_node in enumerate(batch):
-            self.nodes_to_sample[batch_i].add(target_node.node_id)
-            self.sample_node(batch_i, target_node.node_id, 0)
+            target_node_new_id = 0
+            hop = 0
+            self.node_new_ids_to_sample[batch_i].add(target_node_new_id)
+            self.sample_node(batch_i, target_node_new_id, hop)
 
     def issue(self, cmd):
         self.wait_completion.append(cmd)
@@ -105,18 +112,18 @@ class GNN:
         if system_config.sync_hop:
             # print("sync hop")
             if len(self.wait_completion) == 0:
-                last_hop_sampled_nodes = self.nodes_to_sample
+                last_hop_sampled_node_new_ids = self.node_new_ids_to_sample
                 self.reset_hop()
                 
-                for batch_i, sampled_nodes in enumerate(last_hop_sampled_nodes):
+                for batch_i, sampled_node_new_ids in enumerate(last_hop_sampled_node_new_ids):
                     subgraph = self.subgraphs[batch_i]
-                    nodes_to_sample = self.nodes_to_sample[batch_i]
+                    node_new_ids_to_sample = self.node_new_ids_to_sample[batch_i]
 
-                    for sampled_node in sampled_nodes:
-                        next_nodes_to_sample = subgraph.next_nodes_to_sample(sampled_node, self.current_hop + 1)
-                        nodes_to_sample.update(next_nodes_to_sample)
+                    for sampled_node_new_id in sampled_node_new_ids:
+                        next_nodes_to_sample = subgraph.next_node_new_ids_to_sample(sampled_node_new_id, self.current_hop + 1)
+                        node_new_ids_to_sample.update(next_nodes_to_sample)
 
-                num_sampled_nodes = sum([len(x) for x in self.nodes_to_sample])
+                num_sampled_nodes = sum([len(x) for x in self.node_new_ids_to_sample])
 
                 if self.current_hop < n_total_hop():
                     self.system.transfer(num_sampled_nodes * 4, 'ssd', 'host', 'node_id')
@@ -142,9 +149,9 @@ class GNN:
             if self.current_hop < n_total_hop():
                 batch_i = self.cmd2batch[cmd]
                 subgraph = self.subgraphs[batch_i]
-                self.nodes_to_sample[batch_i] = self.cmd2dst_node[cmd]
-                self.fetch_page_async(batch_i, self.nodes_to_sample[batch_i])
-                self.nodes_to_sample[batch_i] = set()
+                self.node_new_ids_to_sample[batch_i] = self.cmd2dst_node_new_ids[cmd]
+                self.fetch_page_async(batch_i, self.node_new_ids_to_sample[batch_i])
+                self.node_new_ids_to_sample[batch_i] = set()
             else:
                 self.system.check_compute()
     
@@ -162,8 +169,8 @@ class GNN:
                 raise Exception(f"unknown pcie operation")
 
     def fetch_page_sync(self):
-        for batch_i, nodes_to_sample in enumerate(self.nodes_to_sample):
-            self.fetch_page_async(batch_i, nodes_to_sample)
+        for batch_i, node_new_ids_to_sample in enumerate(self.node_new_ids_to_sample):
+            self.fetch_page_async(batch_i, node_new_ids_to_sample)
 
         if graph_params['feat_together'] is False:
             if self.current_hop == n_total_hop() - 1:
@@ -171,14 +178,15 @@ class GNN:
                 for node_id in node_ids:
                     self.fetch_node_feat(node_id)
 
-    def fetch_page_async(self, batch_i, nodes_to_sample):
+    def fetch_page_async(self, batch_i, node_new_ids_to_sample):
         if self.current_hop < n_total_hop() - 1:
-            for next_node_to_sample in nodes_to_sample:
-                self.sample_node(batch_i, next_node_to_sample, self.current_hop + 1)
+            for next_node_new_id_to_sample in node_new_ids_to_sample:
+                self.sample_node(batch_i, next_node_new_id_to_sample, self.current_hop + 1)
         elif self.current_hop == n_total_hop() - 1:
             if graph_params['feat_together'] is True:
             # when feature is stored together, we only need to fetch the last hop's features separately
-                for node_id in nodes_to_sample:
+                for node_new_id in node_new_ids_to_sample:
+                    node_id = self.subgraphs[batch_i].get_node_id(node_new_id)
                     self.fetch_node_feat(node_id)
         else:
             raise Exception(f"invalid hop {self.current_hop}")
@@ -199,6 +207,7 @@ if __name__ == "__main__":
         random.seed(i)
         np.random.seed(i)
         zipf_graph = graph.ZipfGraph()
+        # zipf_graph = networkx_graph.get_nxgraph()
         gnn = GNN(zipf_graph)
 
         batch = zipf_graph.get_batch(batch_size())
@@ -238,14 +247,9 @@ if __name__ == "__main__":
             # stat_dict[config['name']] = system.stat
             stat_dict[system_config.name] = system.stat
         print(stat_dict)
-        dump_chip_utilization(stat_dict)
-        dump_sample_latency_breakdown(stat_dict)
-        dump_overall_latency_breakdown(stat_dict)
-        dump_speedup(stat_dict)
-        dump_hop_breakdown(stat_dict)
-        # plot_sample_latency_breakdown(stat_dict)
-        # plot_chip_utilization(stat_dict)
-        # plot_channel_utilization(stat_dict)
-        # plot_hop_breakdown(stat_dict)
-        # plot_overall_latency_breakdown(stat_dict)
-        # plot_speedup(stat_dict)
+        plot_sample_latency_breakdown(stat_dict)
+        plot_chip_utilization(stat_dict)
+        plot_channel_utilization(stat_dict)
+        plot_hop_breakdown(stat_dict)
+        plot_overall_latency_breakdown(stat_dict)
+        plot_speedup(stat_dict)
