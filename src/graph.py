@@ -1,6 +1,8 @@
 import math
 import random
 import numpy as np
+import torch
+
 import matplotlib.pyplot as plt
 from util import *
 from ssd_config import ssd_config
@@ -16,7 +18,7 @@ class Graph:
 class Node:
     def __init__(self, node_id, n_edge):
         self.node_id = node_id
-        self.n_edge = n_edge
+        self.n_edge = max(n_edge, 10)
 
 class RandomGraph(Graph):
     def __init__(self):
@@ -123,6 +125,28 @@ class RandomGraph(Graph):
         plt.grid(alpha=0.4)
         plt.savefig(f'{type(self).__name__}_edge.png')
 
+    def draw_node_cumulative_distribution(self):
+        plt.figure()
+        plt.plot(np.cumsum(self.probs))
+        plt.savefig('cdf.png')
+
+    def avg_degree(self):
+        return np.sum(self.probs * np.arange(self.slot) * self.unit)
+
+class ScaledGraph(RandomGraph):
+    def __init__(self, name):
+        super().__init__()
+        dis_dir = "/users/glacier/work/pg/scaled_distribution"
+        node_dis = torch.load(f"{dis_dir}/{name}/node_dis.pt").numpy()
+        edge_dis = torch.load(f"{dis_dir}/{name}/edge_dis.pt").numpy()
+        
+        node_dis /= np.sum(node_dis)
+        edge_dis /= np.sum(edge_dis)
+
+        self.probs = node_dis
+        self.edge_probs = edge_dis
+        self.unit = 100
+        self.slot = len(node_dis)
 
 class BellGraph(RandomGraph):
     def __init__(self, min_val, max_val, hi_val, log_n):
@@ -168,9 +192,13 @@ class ZipfGraph(RandomGraph):
 
 
 if __name__ == '__main__':
-    zipf = ZipfGraph()
+    # zipf = ZipfGraph()
 
-    zipf.draw_edge_distribution()
+    # zipf.draw_edge_distribution()
 
-    bell = BellGraph(min_val=60, max_val=1100, hi_val=300, log_n=4.5)
-    bell.draw_node_distribution()
+    # bell = BellGraph(min_val=60, max_val=1100, hi_val=300, log_n=4.5)
+    bell = BellGraph(min_val=330, max_val=2100, hi_val=850, log_n=5.2)
+    avg_degree = bell.avg_degree()
+    print(avg_degree)
+    bell.draw_node_cumulative_distribution()
+    # bell.draw_node_distribution()

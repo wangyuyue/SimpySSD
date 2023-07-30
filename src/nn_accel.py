@@ -12,7 +12,7 @@ class GNNAcc(Sim):
     computing = 1
     def __init__(self, system):
         self.location = accel_config.accel_loc
-        self.compute_latency = 50
+        self.compute_latency = 108
         self.status = GNNAcc.idle
         
         self.system = system

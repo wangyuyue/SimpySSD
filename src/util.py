@@ -2,7 +2,7 @@ import random
 import math
 from ssd_config import ssd_config
 
-config_names = ['smartSage', 'smartSage_async', 'sample_sync', 'sample_async', 'sample_async_forward']
+config_names = ['BG-1', 'BG-DG', 'BG-SP', 'BG-DGSP', 'BG-2']
 
 graph_params = {'feat_sz': 500, 'n_node': 1e6, 'feat_in_mem': False,'feat_together': True}
 
@@ -33,3 +33,10 @@ def batch_size():
 def page_align_sz(data_sz):
     pg_sz = ssd_config.pg_sz_kb * 1e3
     return math.ceil(data_sz / pg_sz) * pg_sz
+
+def last_hop_feat_sz():
+    n_feat = 1
+    for n in app_params['sample_per_hop']:
+        n_feat *= n
+    n_feat *= batch_size()
+    return n_feat * graph_params['feat_sz']

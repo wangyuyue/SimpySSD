@@ -35,6 +35,7 @@ class DRAM(Sim):
 
         self.core_next_avail_time = [0] * ssd_config.n_cores
         self.dram_next_avail_time = 0
+        self.read_bytes = 0
 
     def __repr__(self):
         return f'SSD-DRAM'
@@ -58,4 +59,7 @@ class DRAM(Sim):
    
     def rw(self, data_sz):
         avail_time = max(self.dram_next_avail_time, engine.now)
-        self.dram_next_avail_time = avail_time + self.latency + data_sz / self.bandwidth
+        self.dram_next_avail_time = avail_time + data_sz / self.bandwidth
+
+        self.read_bytes += data_sz
+        self.system.stat.dram_read_byte += data_sz

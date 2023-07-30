@@ -6,10 +6,12 @@ class CmdStat:
         self.time[typ] = time
 
 class Stat:
-    def __init__(self, num_hop):
-        self.num_hop = num_hop
-        self.hop_start_time = [0] * (num_hop + 1)
-        self.hop_end_time = [0] * (num_hop + 1)
+    def __init__(self, configs):
+        self.num_hop = configs['num_hop']
+        self.last_transfer_kb = configs['last_transfer_kb']
+
+        self.hop_start_time = [-1] * (self.num_hop + 1)
+        self.hop_end_time = [0] * (self.num_hop + 1)
         
         self.channel_busy_n = []
         self.channel_busy_time = []
@@ -31,6 +33,15 @@ class Stat:
         self.total_time = 0
 
         self.cmd_stat = {}
+
+        self.n_page_per_hop = [0] * (self.num_hop + 1)
+
+        self.sram_read_byte = 0
+        self.sram_write_byte = 0
+        self.accel_n_mac = 0
+
+        self.dram_read_byte = 0
+        self.dram_write_byte = 0
 
     def channel_busy(self, now_time, delta):
         if len(self.channel_busy_n) == 0:
@@ -65,7 +76,7 @@ class Stat:
         # print(self.chip_busy_n)
 
     def start_hop(self, now_time, n_hop):
-        if self.hop_start_time[n_hop] == 0:
+        if self.hop_start_time[n_hop] < 0:
             self.hop_start_time[n_hop] = now_time
         else:
             assert(self.hop_start_time[n_hop] <= now_time)
@@ -106,3 +117,8 @@ class Stat:
 
     def host_delay(self, delay):
         self.total_host_delay += delay
+
+    def set_accel_stat(self, accel_config):
+        self.sram_read_byte = accel_config.sram_read_byte
+        self.sram_write_byte = accel_config.sram_write_byte
+        self.accel_n_mac = accel_config.n_mac

@@ -164,7 +164,11 @@ class Chip(Sim):
 
     def sample_begin(self, buf):
         buf.status = SRAM_Buffer.idle
-        engine.add(Event(self, 'sample_finish', engine.now + 1, {'buf':buf}))
+        sample_latency = 0.2
+        cmd = buf.cmd
+        if cmd.has_feat:
+            sample_latency += graph_params['feat_sz'] / 1365
+        engine.add(Event(self, 'sample_finish', engine.now + sample_latency, {'buf':buf}))
 
     def sample_finish(self, buf):
         buf.status = SRAM_Buffer.ready_to_transfer

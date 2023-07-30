@@ -4,7 +4,7 @@ from pcie import PCIeBus
 from nn_accel import GNNAcc
 from dram import DRAM
 from util import *
-from sys_stat import *
+from statistics.sys_stat import *
 from accel_config import accel_config
 
 class System(Sim):
@@ -26,6 +26,7 @@ class System(Sim):
         self.stat = stat
 
     def process(self, cmd):
+        self.ssd_dram.rw(cmd.data_sz)
         self.app.process(cmd)
 
     def transfer(self, data_sz, src, dst, data_type):
