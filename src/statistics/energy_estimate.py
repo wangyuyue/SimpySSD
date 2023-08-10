@@ -101,10 +101,10 @@ def accel_compute_energy_mj(num_ops, tech_node_nm):
     return total_energy_mj
 
 def accel_sram_energy_mj(num_read_byte, num_write_byte, busy_time_us, idle_time_us):
-    dynamic_read_nj_bit = 0.46176 / 512
-    dynamic_write_nj_bit = 0.482218 / 512
-    standby_leakage_mw = 2559.02
-    gate_leakage_mw = 131.189
+    dynamic_read_nj_bit = 0.585486 / 512
+    dynamic_write_nj_bit = 0.61645 / 512
+    standby_leakage_mw = 3826.86
+    gate_leakage_mw = 195.384
     
     read_energy_mj = (num_read_byte * 8) * dynamic_read_nj_bit / 1e6
     write_energy_mj = (num_write_byte * 8) * dynamic_write_nj_bit / 1e6

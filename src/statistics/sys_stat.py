@@ -6,9 +6,8 @@ class CmdStat:
         self.time[typ] = time
 
 class Stat:
-    def __init__(self, configs):
-        self.num_hop = configs['num_hop']
-        self.last_transfer_kb = configs['last_transfer_kb']
+    def __init__(self, num_hops):
+        self.num_hop = num_hops
 
         self.hop_start_time = [-1] * (self.num_hop + 1)
         self.hop_end_time = [0] * (self.num_hop + 1)

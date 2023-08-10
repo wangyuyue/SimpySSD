@@ -25,7 +25,7 @@ def plot_chip_utilization(stat_dict):
             plt.savefig("chip_utilization_sample.png")
         else:
             plt.savefig("chip_utilization.png")
-    draw(sample=True)
+    draw(sample=True, smooth=2.5)
     draw(sample=False, smooth=5)
 
 def plot_channel_utilization(stat_dict):
@@ -44,8 +44,8 @@ def plot_channel_utilization(stat_dict):
             plt.savefig("channel_utilization_sample.png")
         else:
             plt.savefig("channel_utilization.png")
-    draw(sample=True, smooth=20)
-    draw(sample=False, smooth=1)
+    draw(sample=True, smooth=2.5)
+    draw(sample=False, smooth=5)
 
 def plot_overall_latency_breakdown(stat_dict):
     plt.figure()

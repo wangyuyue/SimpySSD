@@ -177,9 +177,9 @@ class Chip(Sim):
         cmd.data_sz = 0
         if cmd.has_feat:
             cmd.data_sz = graph_params['feat_sz']
-        if cmd.has_ext:
-            ext_cmds = self.ssd.system.app.cmd2extcmds[cmd]
-            self.ssd.forward(ext_cmds)
+        # if cmd.has_ext:
+        #     ext_cmds = self.ssd.system.app.cmd2extcmds[cmd]
+        #     self.ssd.forward(ext_cmds)
         self.check_transfer()
 
     def write_begin(self, cmd, buf):
@@ -399,9 +399,9 @@ class SSD(Sim):
         chip.check_exec()
         chip.check_transfer()
 
-    def forward(self, ext_cmds):
-        for ext_cmd in ext_cmds:
-            self.system.app.issue(ext_cmd)
+    # def forward(self, ext_cmds):
+    #     for ext_cmd in ext_cmds:
+    #         self.system.app.issue(ext_cmd)
 
     def do(self, event):
         if event.func == 'get_result':

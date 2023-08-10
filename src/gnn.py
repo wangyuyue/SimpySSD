@@ -94,6 +94,11 @@ class GNN:
         self.wait_completion.append(cmd)
         # self.system.issue_cmd(cmd)
         # return
+        stat = self.system.stat
+        if stat is not None:
+            stat.cmd_stat[cmd] = CmdStat()
+            stat.cmd_stat[cmd].set_time('issue', engine.now)
+
         if system_config.channel_forward:
             self.system.issue_cmd(cmd)
         else:
@@ -157,6 +162,10 @@ class GNN:
             if self.current_hop == n_total_hop():
                 self.system.check_compute()
                 return
+            
+            if cmd in self.cmd2extcmds:
+                for ext_cmd in self.cmd2extcmds[cmd]:
+                    self.issue(ext_cmd)
             
             batch_i = self.cmd2batch[cmd]
             subgraph = self.subgraphs[batch_i]

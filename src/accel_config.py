@@ -2,6 +2,7 @@ import configparser
 from gnn_topology import GNNTopology
 from util import graph_params, app_params
 from scalesim.scale_sim import scalesim
+import os
 import csv
 
 class AccelConfig():
@@ -22,19 +23,49 @@ class AccelConfig():
         self.freq_mhz = float(config.get('system', 'freq_mhz'))
         self.valid_config = True
 
+        self.got_statistics = False
+
     def sim_exec_time(self):
-        gnn = GNNTopology(app_params['batch'], app_params['sample_per_hop'], graph_params['feat_sz'] // 2, app_params['output_dim'], app_params['hidden_dim'])
-        gnn.gen_topo()
-        gnn.dump_csv('gnn_topo.csv')
+        cached_file = f"./generated/{self.name}/Cached_result.csv"
+        # if Summary file does not exist, generate the csv header
+        if not os.path.exists(cached_file):
+            os.makedirs(f"./generated/{self.name}", exist_ok=True)
+            with open(cached_file, 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(['batch', 'sample_per_hop', 'feat_sz', 'latency_us', 'n_mac', 'sram_read_byte', 'sram_write_byte'])
+
+        batch = app_params['batch']
+        sample_per_hop = app_params['sample_per_hop']
+        str_sample_per_hop = '_'.join([str(sample) for sample in sample_per_hop])
+        feat_sz = graph_params['feat_sz']
+
+        with open(cached_file) as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                if int(row[0]) == batch and row[1] == str_sample_per_hop and int(row[2]) == feat_sz:
+                    self.latency_us, self.n_mac, self.sram_read_byte, self.sram_write_byte = map(float, row[3:])
+                    print("Use cached result")
+                    return self.latency_us
+
+        with open(cached_file, 'a') as f:
+            writer = csv.writer(f)
+            gnn = GNNTopology(batch, sample_per_hop, feat_sz // 2, app_params['output_dim'], app_params['hidden_dim'])
+            gnn.gen_topo()
+            gnn.dump_csv('gnn_topo.csv')
         
-        s = scalesim(save_disk_space=True, verbose=False,
+            s = scalesim(save_disk_space=True, verbose=False,
                     config=self.conf_file,
                     topology='gnn_topo.csv',
                     input_type_gemm=True
                     )
-        s.run_scale(top_path='./generated')
-        total_cyles = s.get_total_cycles()
-        return total_cyles / self.freq_mhz
+            s.run_scale(top_path='./generated')
+            total_cyles = s.get_total_cycles()
+
+            self.latency_us = total_cyles / self.freq_mhz
+            self.get_statistics()
+            writer.writerow([batch, str_sample_per_hop, feat_sz, self.latency_us, self.n_mac, self.sram_read_byte, self.sram_write_byte])
+            return self.latency_us
     
     def get_statistics(self):
         self.n_mac = 0
@@ -80,4 +111,3 @@ if __name__ == '__main__':
     # accel_config.set_accel_config(config_dir+'pcie_tpu.cfg')
     exec_time = accel_config.sim_exec_time()
     print(f"Execution time: {exec_time} us")
-    accel_config.get_statistics()
