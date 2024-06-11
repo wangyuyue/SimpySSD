@@ -1,4 +1,8 @@
-## <font color="#FFD43B">Sim</font><font color="#306998">py</font><font color="#646464">SSD</font>: A Simple SSD Simulator in Python
+<p align="center">
+  <img src="logo.png" alt="SimpySSD Logo" width="35%">
+</p>
+
+## SimpySSD: A Simple SSD Simulator in Python
 
 ### Install
 ```bash
