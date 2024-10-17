@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 
 import torch
@@ -10,11 +12,12 @@ from torch_geometric.data import HeteroData
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-data_dir = "/users/glacier/work/pg/dataset"
-deg_dir = "/users/glacier/work/pg/deg_file"
+pyg_dir = os.environ['PYG_DATA_DIR']
+data_dir = f"{pyg_dir}/dataset"
+deg_dir = f"{pyg_dir}/deg_file"
+scaled_dis_dir = f"{pyg_dir}/scaled_distribution"
 
-def example_dataset():
-    return TUDataset(root='/tmp/ENZYMES', name='ENZYMES')
+os.system(f"mkdir -p {data_dir} {deg_dir} {scaled_dis_dir}")
 
 def reddit():
     dataset = Reddit(root=f"{data_dir}/reddit")
@@ -84,10 +87,8 @@ def get_degree_from_data(name, data):
 
 def draw_deg_hist(name, deg):
     plt.figure()
-    sns.histplot(data=deg, bins=100, log_scale=(False, True))
+    sns.histplot(data=deg, bins=20, log_scale=(False, True))
     plt.savefig(f"{name}.png")
-
-
 
 def load_deg_file(name):
     return torch.load(f"{deg_dir}/{name}.pt")
@@ -108,8 +109,6 @@ def scale_degree(degs):
     return degs
 
 def store_distribution(name, degs):
-    scaled_dis_dir = "/users/glacier/work/pg/scaled_distribution"
-    
     node_distribution = torch.bincount((degs/100).long())
     node_distribution = node_distribution/torch.sum(node_distribution)
 
@@ -132,22 +131,17 @@ def draw_distribution(name, node_distribution, edge_distribution):
     plt.savefig(f"{name}_sample_distribution.png")
 
 for name in names:
-    # data = load_data(name)
-    # get_degree_from_data(name, data)
+    data = load_data(name)
+    get_degree_from_data(name, data)
     degs = load_deg_file(name)
-    # draw_deg_hist(name, deg)
+    draw_deg_hist(name, degs)
     scaled_degs = scale_degree(degs)
-    print(torch.sum(scaled_degs) / len(scaled_degs))
+    print(f"{name} dataset synthetic degree: {torch.sum(scaled_degs).item() / len(scaled_degs)}")
 
     node_distribution, edge_distribution = store_distribution(name, scaled_degs)
     draw_distribution(name, node_distribution, edge_distribution)
-
-    
-
-    
 
 # https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.data.HeteroData.html
 # https://pytorch-geometric.readthedocs.io/en/latest/tutorial/heterogeneous.html
 # https://github.com/snap-stanford/ogb
 # https://pytorch-geometric.readthedocs.io/en/latest/cheatsheet/data_cheatsheet.html
-# https://dl.acm.org/doi/pdf/10.1145/3470496.3527391

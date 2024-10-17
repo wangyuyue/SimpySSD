@@ -70,12 +70,13 @@ if __name__ == '__main__':
     
     gnn.dump_csv('gnn_topo.csv')
     
-    from scalesim.scale_sim import scalesim
+    import os
+    from scale_sim import scalesim
     s = scalesim(save_disk_space=True, verbose=False,
-                 config='configs/accelerator/isc_tpu.cfg',
+                 config=os.environ['BG_BASE_DIR'] + '/configs/accelerator/isc_tpu.cfg',
                  topology='gnn_topo.csv',
                  input_type_gemm=True
                  )
-    s.run_scale(top_path='./generated')
+    s.run_scale(top_path=os.environ['BG_BASE_DIR'] + '/generated')
     total_cyles = s.get_total_cycles()
     print("total cycles ", total_cyles)

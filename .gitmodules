@@ -1,0 +1,3 @@
+[submodule "scalesim"]
+	path = scalesim
+	url = https://github.com/wangyuyue/ScaleSim-2-BeaconGNN.git

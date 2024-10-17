@@ -45,6 +45,7 @@ class SSDConfig:
 ssd_config = SSDConfig()
 
 if __name__ == '__main__':
+    import os
     cfg = ssd_config
-    cfg.read_conf_file('configs/ssd/traditional_ssd.cfg')
+    cfg.read_conf_file(os.environ['BG_BASE_DIR'] + '/configs/ssd/traditional_ssd.cfg')
     cfg.dump()

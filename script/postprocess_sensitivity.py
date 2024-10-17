@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-t', '--test_name')
 
 args = parser.parse_args()
-path = f'test/{args.test_name}'
+path = f"{os.environ['BG_TEST_DIR']}/{args.test_name}"
 
 latency = {}
 
@@ -36,8 +36,6 @@ for setting in settings:
     normalized_throughput[setting] = {}
     for config, lat in latency[setting].items():
         normalized_throughput[setting][config] = max_latency / lat
-
-print(normalized_throughput)
 
 # write normalized_throughput to csv, header is test_name, latency.keys()
 with open(f'{path}/normalized_throughput.csv', 'w', newline='') as csvfile:

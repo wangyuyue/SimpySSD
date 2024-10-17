@@ -1,6 +1,10 @@
 __pycache__
-*/__pycache__
-scale-sim-v2
-./*.png
+scalesim/
+test
+src/scale_sim.py
 generated
+pg
+*.png
 *.csv
+
+!logo.png

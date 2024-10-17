@@ -1,3 +1,4 @@
+import os
 import math
 import random
 import numpy as np
@@ -136,7 +137,7 @@ class RandomGraph(Graph):
 class ScaledGraph(RandomGraph):
     def __init__(self, name):
         super().__init__()
-        dis_dir = "/users/glacier/work/pg/scaled_distribution"
+        dis_dir = f"{os.environ['PYG_DATA_DIR']}/scaled_distribution"
         node_dis = torch.load(f"{dis_dir}/{name}/node_dis.pt").numpy()
         edge_dis = torch.load(f"{dis_dir}/{name}/edge_dis.pt").numpy()
         

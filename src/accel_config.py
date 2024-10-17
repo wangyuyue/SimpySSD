@@ -1,7 +1,7 @@
 import configparser
 from gnn_topology import GNNTopology
 from util import graph_params, app_params
-from scalesim.scale_sim import scalesim
+from scale_sim import scalesim
 import os
 import csv
 
@@ -9,6 +9,7 @@ class AccelConfig():
     def __init__(self):
         self.valid_config = False
         self.accel_loc = None
+        self.generated_dir = f"{os.environ['BG_BASE_DIR']}/generated/"
 
     def set_accel_config(self, conf_file):
         self.conf_file = conf_file
@@ -25,11 +26,13 @@ class AccelConfig():
 
         self.got_statistics = False
 
+        self.output_dir=f"{self.generated_dir}/{self.name}"
+
     def sim_exec_time(self):
-        cached_file = f"./generated/{self.name}/Cached_result.csv"
+        cached_file = f"{self.output_dir}/Cached_result.csv"
         # if Summary file does not exist, generate the csv header
         if not os.path.exists(cached_file):
-            os.makedirs(f"./generated/{self.name}", exist_ok=True)
+            os.makedirs(self.output_dir, exist_ok=True)
             with open(cached_file, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['batch', 'sample_per_hop', 'feat_sz', 'latency_us', 'n_mac', 'sram_read_byte', 'sram_write_byte'])
@@ -59,7 +62,7 @@ class AccelConfig():
                     topology='gnn_topo.csv',
                     input_type_gemm=True
                     )
-            s.run_scale(top_path='./generated')
+            s.run_scale(top_path=self.generated_dir)
             total_cyles = s.get_total_cycles()
 
             self.latency_us = total_cyles / self.freq_mhz
@@ -71,7 +74,7 @@ class AccelConfig():
         self.n_mac = 0
         self.n_layer = 0
         self.layer_cycle = []
-        with open(f"./generated/{self.name}/COMPUTE_REPORT.csv") as f:
+        with open(f"{self.output_dir}/COMPUTE_REPORT.csv") as f:
             reader = csv.reader(f)
             next(reader)  # Skip header row
             # print("compute cycle, compute util")
@@ -85,7 +88,7 @@ class AccelConfig():
         
         sram_read = 0
         sram_write = 0
-        with open(f"./generated/{self.name}/BANDWIDTH_REPORT.csv") as f:
+        with open(f"{self.output_dir}/BANDWIDTH_REPORT.csv") as f:
             reader = csv.reader(f)
             next(reader)
             # print("IF_MAP Bandwidth, FILTER Bandwidth, OF_MAP Bandwidth")
@@ -106,8 +109,6 @@ accel_config = AccelConfig()
 
 if __name__ == '__main__':
     accel_config = AccelConfig()
-    config_dir = 'configs/accelerator/'
-    accel_config.set_accel_config(config_dir+'isc_tpu.cfg')
-    # accel_config.set_accel_config(config_dir+'pcie_tpu.cfg')
+    accel_config.set_accel_config(os.environ['BG_BASE_DIR']+'/configs/accelerator/isc_tpu.cfg')
     exec_time = accel_config.sim_exec_time()
     print(f"Execution time: {exec_time} us")

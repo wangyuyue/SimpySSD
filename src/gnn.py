@@ -4,7 +4,7 @@ from ssd_estimate import logger, Cmd
 from util import batch_size, n_total_hop
 from util import graph_params
 
-from statistics.sys_stat import *
+from ssd_statistics.sys_stat import *
 from system_config import system_config
 from accel_config import accel_config
 

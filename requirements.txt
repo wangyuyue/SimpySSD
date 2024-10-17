@@ -1,8 +1,17 @@
 lru-dict
-matplotlib
-numpy
-pandas
-seaborn
-networkx
 argparse
+numpy<2
+pandas
+networkx
+
+# For plotting and logging
+matplotlib
+seaborn
 xlsxwriter
+
+# PyTorch and related packages
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.2.1
+torch_geometric
+ogb  # OGB dataset loader

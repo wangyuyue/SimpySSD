@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import os
 import random
 import numpy as np
 
@@ -15,10 +18,10 @@ from system_config import system_config, set_system_config
 from ssd_config import ssd_config
 from accel_config import accel_config
 
-from statistics.energy_estimate import *
-from statistics.sys_stat import *
-from statistics.dump import *
-from statistics.plot import *
+from ssd_statistics.energy_estimate import *
+from ssd_statistics.sys_stat import *
+from ssd_statistics.dump import *
+from ssd_statistics.plot import *
 
 from gnn import GNN
 
@@ -30,6 +33,10 @@ def reset(gnn):
     gnn.reset_batch()
     gnn.reset_hop()
 
+# We use synthetic graphs to represent the four open-source datasets.
+# Since we couldn't locate the Protein-PI dataset online, we approximate
+# its degree distribution to simulate it. Note that, as the GNN access
+# pattern largely depends on distribution, this approximation is appropriate.
 def get_graph(name):
     if name in ['reddit', 'amazon', 'ml-1m', 'ogbn-papers100M']:
         return graph.ScaledGraph(name)
@@ -53,7 +60,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ssd_config.read_conf_file(f'configs/ssd/{args.ssd}.cfg')
+    ssd_config.read_conf_file(os.environ['BG_BASE_DIR'] + f'/configs/ssd/{args.ssd}.cfg')
     if args.batch_size:
         app_params['batch'] = int(args.batch_size)
     if args.n_core:
@@ -72,7 +79,8 @@ if __name__ == "__main__":
 
     ssd_config.dump()
 
-    accel_config.set_accel_config('configs/accelerator/isc_tpu.cfg')
+    accel_config_path = os.environ['BG_BASE_DIR'] + '/configs/accelerator/isc_tpu.cfg'
+    accel_config.set_accel_config(accel_config_path)
     accel_config.sim_exec_time()
 
     repeat = 1

@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
+sns.set_theme()
 import pandas as pd
 
 from .series_process import smooth_timeline
 from .dataframe import *
 
-sns.set_theme()
 # marker: s(square), o(circle)
 # linestyle -(solid), --(dash)
 

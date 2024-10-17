@@ -4,7 +4,7 @@ from pcie import PCIeBus
 from nn_accel import GNNAcc
 from dram import DRAM
 from util import *
-from statistics.sys_stat import *
+from ssd_statistics.sys_stat import *
 from accel_config import accel_config
 
 class System(Sim):

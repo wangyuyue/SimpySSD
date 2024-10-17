@@ -39,13 +39,13 @@ class SystemConfig():
 system_config = SystemConfig()
 
 def set_system_config(name):
-    system_config_path = f'configs/system/{name}.cfg'
+    system_config_path = os.environ['BG_BASE_DIR'] + f'/configs/system/{name}.cfg'
     system_config.read_conf_file(system_config_path)
 
 if __name__ == '__main__':
-    system_config_path = 'configs/system/'
-    for cfg_file in os.listdir(system_config_path):
+    system_config_dir = os.environ['BG_BASE_DIR'] + '/configs/system/'
+    for cfg_file in os.listdir(system_config_dir):
         if cfg_file.endswith('.cfg'):
             cfg = SystemConfig()
-            cfg.read_conf_file(system_config_path + cfg_file)
+            cfg.read_conf_file(system_config_dir + cfg_file)
             cfg.dump()

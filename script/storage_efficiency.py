@@ -1,8 +1,15 @@
+#!/usr/bin/env python3
+
 import math
 from queue import PriorityQueue
+import argparse
+import os
+import sys
+
+sys.path.append(f"{os.environ['BG_BASE_DIR']}/src")
 import graph
 from util import graph_params
-import argparse
+
 
 page_size = 4096
 max_n_section = 16

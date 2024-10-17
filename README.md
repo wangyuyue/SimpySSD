@@ -9,11 +9,15 @@
 git clone https://github.com/wangyuyue/SimpySSD.git
 cd SimpySSD
 pip3 install -r requirements.txt
+source setup.sh
 ```
 ### Example usage
 ```bash
-workload=amazon
-python3 src/main.py --workload "$workload"
+# prepare datasets
+./script/prepare_dataset.py
+
+# to run all experiments in BeaconGNN:
+./script/run_all_tests.sh
 ```
 
 ### Citation

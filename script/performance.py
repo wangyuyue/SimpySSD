@@ -1,8 +1,10 @@
-import xlsxwriter
+#!/usr/bin/env python3
+
 import os
 import csv
+import xlsxwriter
 
-path = 'test/workload'
+path = f"{os.environ['BG_TEST_DIR']}/workload"
 
 workloads = os.listdir(path)
 configs = ['BG-1', 'BG-DG', 'BG-SP', 'BG-DGSP', 'BG-2']
@@ -10,10 +12,11 @@ configs = ['BG-1', 'BG-DG', 'BG-SP', 'BG-DGSP', 'BG-2']
 
 # transform flash channel/chip utilization data
 for workload in workloads:
+    output_dir = f'{path}/{workload}'
     for component in ['channel', 'chip']:
         lines = []
         series = {}
-        with open(f'{path}/{workload}/{component}_utilization.csv') as f:
+        with open(f'{output_dir}/{component}_utilization.csv') as f:
             reader = csv.reader(f)
             next(reader)
             for row in reader:
@@ -21,7 +24,7 @@ for workload in workloads:
             for config in configs:
                 series[config] = [(line[1], line[2]) for line in lines if line[0] == config]
 
-        with open(f'{path}/{workload}/{component}_util_transformed.csv', 'w') as f:
+        with open(f'{output_dir}/{component}_util_transformed.csv', 'w') as f:
             writer = csv.writer(f)
             max_len = max([len(s) for s in series.values()])
             writer.writerow(['time', 'util'] * len(configs))
@@ -38,7 +41,7 @@ for workload in workloads:
                 writer.writerow(row)
 
 # transform hop latency breakdown data
-    with open(f'{path}/{workload}/hop_latency_breakdown.csv') as f:
+    with open(f'{output_dir}/hop_latency_breakdown.csv') as f:
         lines = []
         reader = csv.reader(f)
         next(reader)
@@ -51,7 +54,7 @@ for workload in workloads:
                 durations[i] = float(row[2*i + 2]) - float(row[2*i + 1])
                 lines.append([config, start_time] + durations)
 
-    with open(f'{path}/{workload}/hop_latency_breakdown_transformed.csv', 'w') as f:
+    with open(f'{output_dir}/hop_latency_breakdown_transformed.csv', 'w') as f:
         writer = csv.writer(f)
         writer.writerow(['config', 'start_time'] + [f'hop_{i}' for i in range(n_hop)])
         for line in lines:
